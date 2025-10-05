@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>AR Photo with FBX — Preloaded Model</title>
+  <title>AR Photo with glTF — Preloaded Model</title>
   <style>
     html, body { height: 100%; margin: 0; background: #000; }
-    .ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px; display: grid; gap: 8px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 20%  ); z-index: 10; }
+    .ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px; display: grid; gap: 8px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 20%); z-index: 10; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .btn { appearance: none; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; padding: 10px 12px; border-radius: 10px; font: 600 14px/1.2 system-ui, sans-serif; cursor: pointer; }
     .btn:active { transform: translateY(1px); }
@@ -17,14 +17,14 @@
     .badge { background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.2); padding: 6px 10px; border-radius: 999px; color: #fff; font: 12px system-ui, sans-serif; }
     a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
   </style>
-  
+
+  <!-- A‑Frame (stable) -->
   <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
-  <script src="https://unpkg.com/three@0.136.0/examples/js/loaders/FBXLoader.js"></script>
-  <script src="https://unpkg.com/three@0.136.0/examples/js/libs/inflate.min.js"></script>
+  <!-- (Optional) If your GLB is Draco-compressed, also include DRACOLoader and set window.DRACO_DECODER_PATH accordingly. -->
 </head>
 <body>
   <div class="top-left">
-    <div class="badge">🎯 Markerless: preloaded model floats in front of camera</div>
+    <div class="badge">🎯 Markerless: preloaded glTF model floats in front of camera</div>
     <button id="btnSnap" class="btn">📸 Take Photo</button>
   </div>
 
@@ -33,18 +33,20 @@
            webxr="optionalFeatures: hit-test;">
 
     <a-assets>
-      <!-- Replace this path with your own FBX model URL -->
-      <a-asset-item id="model" src="https://aaronx3011.github.io/pruebas-restaurant/test.fbx"></a-asset-item>
+      <!-- Replace src with your GLB/GLTF URL. Prefer .glb with embedded textures. -->
+      <a-asset-item id="model" src="test.glb"></a-asset-item>
     </a-assets>
 
+    <!-- Lighting -->
     <a-entity light="type: ambient; intensity: 0.8"></a-entity>
     <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
 
+    <!-- Camera rig and model holder -->
     <a-entity id="rig">
       <a-entity id="camera" camera look-controls wasd-controls="enabled:false"></a-entity>
       <a-entity id="holder" position="0 0 -2">
-        <!-- Preloaded FBX model -->
-        <a-entity id="fbxModel" fbx-model-loader="src: #model; scale: 1"></a-entity>
+        <!-- Preloaded glTF model -->
+        <a-entity id="modelEntity" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
       </a-entity>
     </a-entity>
 
@@ -79,22 +81,8 @@
   </div>
 
   <script>
-    AFRAME.registerComponent('fbx-model-loader', {
-      schema: { src: {type: 'asset'}, scale: {default: 1} },
-      init: function(){ this.loader = new THREE.FBXLoader(); },
-      update: function(){
-        const el = this.el; const src = this.data.src; if (!src) return;
-        this.loader.load(src, (group) => {
-          while (el.object3D.children.length) el.object3D.remove(el.object3D.children[0]);
-          group.traverse((o)=>{ if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.material.needsUpdate = true; }});
-          group.scale.setScalar(this.data.scale || 1);
-          el.object3D.add(group);
-        }, undefined, (err)=>{ console.warn('FBX load error', err); alert('FBX load failed: ' + err.message); });
-      }
-    });
-
     const holder = document.getElementById('holder');
-    const fbxEl = document.getElementById('fbxModel');
+    const modelEl = document.getElementById('modelEntity');
     const sceneEl = document.getElementById('scene');
 
     const dist = document.getElementById('dist');
@@ -111,12 +99,14 @@
       holder.object3D.position.set(0, parseFloat(height.value), -parseFloat(dist.value));
       distVal.textContent = parseFloat(dist.value).toFixed(1);
       heightVal.textContent = parseFloat(height.value).toFixed(2);
+
       const y = parseFloat(rotY.value);
       rotYVal.textContent = y.toFixed(0);
-      fbxEl.object3D.rotation.set(0, THREE.MathUtils.degToRad(y), 0);
+      modelEl.object3D.rotation.set(0, THREE.MathUtils.degToRad(y), 0);
+
       const s = parseFloat(scale.value);
       scaleVal.textContent = s.toFixed(2);
-      fbxEl.object3D.scale.set(s, s, s);
+      modelEl.object3D.scale.set(s, s, s);
     }
     [dist, height, rotY, scale].forEach(i => i.addEventListener('input', updateTransforms));
     updateTransforms();
@@ -125,6 +115,7 @@
       dist.value = 2; height.value = 0; rotY.value = 0; scale.value = 1; updateTransforms();
     });
 
+    // Snapshot (photo)
     const btnSnap = document.getElementById('btnSnap');
     btnSnap.addEventListener('click', ()=>{
       const renderer = sceneEl.renderer;
