@@ -1,57 +1,121 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>A-Frame AR Example</title>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>A‑Frame AR — Stable Template</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #000; }
+    .overlay { position: fixed; inset: env(safe-area-inset-top) 0 auto 0; display: flex; justify-content: center; padding: 12px; z-index: 10; pointer-events: none; }
+    .panel { pointer-events: auto; background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px; border-radius: 10px; font-family: system-ui, sans-serif; font-size: 14px; display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px); }
+    .panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+    .panel a { color: #6ee7ff; }
+    /* Prevent any accidental overlays from covering the camera */
+    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+  </style>
 
-    <!-- A-Frame core -->
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-    <!-- AR.js integration -->
-    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.3/aframe/build/aframe-ar.js"></script>
-
-    <style>
-      body, html {
-        margin: 0;
-        overflow: hidden;
-        height: 100%;
-        background: #000;
-      }
-      .overlay {
-        position: fixed;
-        top: 10px;
-        left: 10px;
-        background: rgba(0,0,0,0.5);
-        color: #fff;
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-family: sans-serif;
-      }
-    </style>
-  </head>
-
-  <body>
-    <div class="overlay">
-      Point your camera at the <strong>Hiro marker</strong><br />
-      (print <a href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/examples/hiro.png" target="_blank" style="color:#4ef">this marker</a>)
+  <!-- Known-stable combo: A‑Frame 1.4.1 + AR.js 3.4.5 -->
+  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+</head>
+<body>
+  <div class="overlay">
+    <div class="panel" id="ui">
+      <span id="status">Tap Start if camera is black or paused.</span>
+      <button id="start">Start camera</button>
+      <a href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/examples/hiro.png" target="_blank" rel="noopener">Hiro marker</a>
+      <button id="flip">Flip cam</button>
     </div>
+  </div>
 
-    <a-scene
-      vr-mode-ui="enabled: false"
-      embedded
-      arjs="sourceType: webcam; debugUIEnabled: false;"
-    >
-      <!-- Marker definition -->
-      <a-marker preset="hiro">
-        <!-- 3D object appears when marker detected -->
-        <a-box position="0 0.5 0" material="color: #4ef" rotation="0 45 0"></a-box>
-        <a-text value="Hello AR!" position="0 1 0" align="center" color="#FFF"></a-text>
-      </a-marker>
+  <a-scene
+    id="scene"
+    embedded
+    vr-mode-ui="enabled: false"
+    renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
+    arjs="
+      sourceType: webcam;
+      facingMode: environment;
+      debugUIEnabled: false;
+      videoTexture: true;
+      trackingMethod: best;
+      sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
+    "
+  >
+    <!-- Marker content -->
+    <a-marker preset="hiro">
+      <a-box position="0 0.5 0" depth="0.5" height="0.5" width="0.5" color="#4ef" rotation="0 45 0"></a-box>
+      <a-text value="Hello AR" color="#fff" position="0 1 0" align="center"></a-text>
+    </a-marker>
 
-      <!-- Camera -->
-      <a-entity camera></a-entity>
-    </a-scene>
-  </body>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    // Utilities to (re)start AR.js video after user gesture (iOS/Safari) and on visibility changes
+    const sceneEl = document.getElementById('scene');
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('start');
+    const flipBtn  = document.getElementById('flip');
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    async function startAR() {
+      try {
+        // AR.js boot typically begins automatically, but iOS often needs a user gesture
+        const sys = sceneEl.systems && sceneEl.systems['arjs'];
+        if (sys && sys.arSource && sys.arSource.ready === false) {
+          await sys.arSource.start();
+        }
+        setStatus('Camera started');
+      } catch (e) {
+        console.warn('Start error:', e);
+        setStatus('Start failed: ' + e.message);
+      }
+    }
+
+    // Flip camera between environment/user if device supports it
+    let usingFront = false;
+    async function flipCamera() {
+      const sys = sceneEl.systems && sceneEl.systems['arjs'];
+      if (!sys || !sys.arSource) return;
+      try {
+        usingFront = !usingFront;
+        await sys.arSource.stop();
+        sys.arSource.parameters.facingMode = usingFront ? 'user' : 'environment';
+        await sys.arSource.start();
+        setStatus('Camera: ' + (usingFront ? 'front' : 'rear'));
+      } catch (e) {
+        console.warn('Flip error:', e);
+        setStatus('Flip failed: ' + e.message);
+      }
+    }
+
+    // Handle page visibility (Android Chrome sometimes pauses camera)
+    document.addEventListener('visibilitychange', () => {
+      const sys = sceneEl.systems && sceneEl.systems['arjs'];
+      if (!sys || !sys.arSource) return;
+      if (!document.hidden) {
+        // On return, (re)start if video is paused/black
+        const video = sys.arSource.domElement; // underlying <video>
+        if (video && (video.paused || video.readyState < 2)) {
+          sys.arSource.start().then(()=> setStatus('Resumed after tab switch'));
+        }
+      }
+    });
+
+    // Wire UI
+    startBtn.addEventListener('click', startAR);
+    flipBtn.addEventListener('click', flipCamera);
+
+    // Initial hint depending on context
+    if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+      setStatus('Use HTTPS or localhost for camera access');
+    } else {
+      setStatus('If you see black, tap Start (iOS requires a gesture)');
+    }
+  </script>
+</body>
 </html>
-
