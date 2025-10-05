@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A-Frame AR Example</title>
+
+    <!-- A-Frame core -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+    <!-- AR.js integration -->
+    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.3/aframe/build/aframe-ar.js"></script>
+
+    <style>
+      body, html {
+        margin: 0;
+        overflow: hidden;
+        height: 100%;
+        background: #000;
+      }
+      .overlay {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        background: rgba(0,0,0,0.5);
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-family: sans-serif;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="overlay">
+      Point your camera at the <strong>Hiro marker</strong><br />
+      (print <a href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/aframe/examples/marker-training/examples/hiro.png" target="_blank" style="color:#4ef">this marker</a>)
+    </div>
+
+    <a-scene
+      vr-mode-ui="enabled: false"
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false;"
+    >
+      <!-- Marker definition -->
+      <a-marker preset="hiro">
+        <!-- 3D object appears when marker detected -->
+        <a-box position="0 0.5 0" material="color: #4ef" rotation="0 45 0"></a-box>
+        <a-text value="Hello AR!" position="0 1 0" align="center" color="#FFF"></a-text>
+      </a-marker>
+
+      <!-- Camera -->
+      <a-entity camera></a-entity>
+    </a-scene>
+  </body>
+</html>
+
