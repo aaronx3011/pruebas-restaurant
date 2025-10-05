@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>AR Photo with FBX — Preloaded Model</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #000; }
+    .ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px; display: grid; gap: 8px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 20%  ); z-index: 10; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn { appearance: none; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; padding: 10px 12px; border-radius: 10px; font: 600 14px/1.2 system-ui, sans-serif; cursor: pointer; }
+    .btn:active { transform: translateY(1px); }
+    .panel { display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: rgba(0,0,0,.45); backdrop-filter: blur(6px); color: #fff; font-family: system-ui, sans-serif; }
+    label { font-size: 12px; color: #dbeafe; }
+    input[type=range] { width: 100%; }
+    .top-left { position: fixed; top: env(safe-area-inset-top); left: 10px; right: 10px; z-index: 11; display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+    .badge { background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.2); padding: 6px 10px; border-radius: 999px; color: #fff; font: 12px system-ui, sans-serif; }
+    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+  </style>
+  
+  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+  <script src="https://unpkg.com/three@0.136.0/examples/js/loaders/FBXLoader.js"></script>
+  <script src="https://unpkg.com/three@0.136.0/examples/js/libs/inflate.min.js"></script>
+</head>
+<body>
+  <div class="top-left">
+    <div class="badge">🎯 Markerless: preloaded model floats in front of camera</div>
+    <button id="btnSnap" class="btn">📸 Take Photo</button>
+  </div>
+
+  <a-scene id="scene" embedded vr-mode-ui="enabled: false"
+           renderer="alpha: true; antialias: true; precision: mediump; physicallyCorrectLights: true;"
+           webxr="optionalFeatures: hit-test;">
+
+    <a-assets>
+      <!-- Replace this path with your own FBX model URL -->
+      <a-asset-item id="model" src="./BB_VR_UNITY.fbx"></a-asset-item>
+    </a-assets>
+
+    <a-entity light="type: ambient; intensity: 0.8"></a-entity>
+    <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
+
+    <a-entity id="rig">
+      <a-entity id="camera" camera look-controls wasd-controls="enabled:false"></a-entity>
+      <a-entity id="holder" position="0 0 -2">
+        <!-- Preloaded FBX model -->
+        <a-entity id="fbxModel" fbx-model-loader="src: #model; scale: 1"></a-entity>
+      </a-entity>
+    </a-entity>
+
+  </a-scene>
+
+  <div class="ui">
+    <div class="panel">
+      <div class="row">
+        <button id="btnReset" class="btn">Reset Pose</button>
+      </div>
+      <div class="row">
+        <div>
+          <label>Distance (m): <span id="distVal">2.0</span></label>
+          <input id="dist" type="range" min="0.5" max="6" step="0.1" value="2">
+        </div>
+        <div>
+          <label>Height (m): <span id="heightVal">0.0</span></label>
+          <input id="height" type="range" min="-1" max="2" step="0.05" value="0">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Rotate Y (°): <span id="rotYVal">0</span></label>
+          <input id="rotY" type="range" min="-180" max="180" step="1" value="0">
+        </div>
+        <div>
+          <label>Scale: <span id="scaleVal">1.0</span></label>
+          <input id="scale" type="range" min="0.05" max="5" step="0.05" value="1">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    AFRAME.registerComponent('fbx-model-loader', {
+      schema: { src: {type: 'asset'}, scale: {default: 1} },
+      init: function(){ this.loader = new THREE.FBXLoader(); },
+      update: function(){
+        const el = this.el; const src = this.data.src; if (!src) return;
+        this.loader.load(src, (group) => {
+          while (el.object3D.children.length) el.object3D.remove(el.object3D.children[0]);
+          group.traverse((o)=>{ if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.material.needsUpdate = true; }});
+          group.scale.setScalar(this.data.scale || 1);
+          el.object3D.add(group);
+        }, undefined, (err)=>{ console.warn('FBX load error', err); alert('FBX load failed: ' + err.message); });
+      }
+    });
+
+    const holder = document.getElementById('holder');
+    const fbxEl = document.getElementById('fbxModel');
+    const sceneEl = document.getElementById('scene');
+
+    const dist = document.getElementById('dist');
+    const height = document.getElementById('height');
+    const rotY = document.getElementById('rotY');
+    const scale = document.getElementById('scale');
+
+    const distVal = document.getElementById('distVal');
+    const heightVal = document.getElementById('heightVal');
+    const rotYVal = document.getElementById('rotYVal');
+    const scaleVal = document.getElementById('scaleVal');
+
+    function updateTransforms(){
+      holder.object3D.position.set(0, parseFloat(height.value), -parseFloat(dist.value));
+      distVal.textContent = parseFloat(dist.value).toFixed(1);
+      heightVal.textContent = parseFloat(height.value).toFixed(2);
+      const y = parseFloat(rotY.value);
+      rotYVal.textContent = y.toFixed(0);
+      fbxEl.object3D.rotation.set(0, THREE.MathUtils.degToRad(y), 0);
+      const s = parseFloat(scale.value);
+      scaleVal.textContent = s.toFixed(2);
+      fbxEl.object3D.scale.set(s, s, s);
+    }
+    [dist, height, rotY, scale].forEach(i => i.addEventListener('input', updateTransforms));
+    updateTransforms();
+
+    document.getElementById('btnReset').addEventListener('click', ()=>{
+      dist.value = 2; height.value = 0; rotY.value = 0; scale.value = 1; updateTransforms();
+    });
+
+    const btnSnap = document.getElementById('btnSnap');
+    btnSnap.addEventListener('click', ()=>{
+      const renderer = sceneEl.renderer;
+      if (!renderer) return alert('Renderer not ready yet. Try again in a second.');
+      renderer.preserveDrawingBuffer = true;
+      const dataURL = renderer.domElement.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataURL; a.download = 'ar-photo.png'; a.click();
+      renderer.preserveDrawingBuffer = false;
+    });
+  </script>
+</body>
+</html>
+
