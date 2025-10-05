@@ -3,61 +3,45 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Web Compass</title>
+  <title>Web Compass — Stabilized</title>
   <style>
-    :root{
-      --bg:#0b1020; --panel:#0e1628; --muted:#90a4b8; --text:#e8edf4; --accent:#4fc3f7; --red:#ef4444;
-      --ring:#1f2a3a; --ring2:#162235; --tick:#42556b; --north:#f87171; --needle:#ff5a5a;
-    }
+    :root{ --bg:#0b1020; --panel:#0e1628; --muted:#90a4b8; --text:#e8edf4; --accent:#4fc3f7; --ring:#1f2a3a; --ring2:#162235; --tick:#42556b; --north:#f87171; --needle:#ff5a5a; }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0; background: radial-gradient(1200px 800px at 70% -10%, #0c1a32 0%, var(--bg) 50%);
-      color:var(--text); font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial; display:grid; place-items:center}
-    .wrap{width:min(680px,100%); padding:20px}
+    body{margin:0; background: radial-gradient(1200px 800px at 70% -10%, #0c1a32 0%, var(--bg) 50%); color:var(--text); font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial; display:grid; place-items:center}
+    .wrap{width:min(720px,100%); padding:20px}
     header{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px}
     header h1{font-size:20px; margin:0}
     .status{font-size:12px; color:var(--muted)}
-
-    .card{background:linear-gradient(180deg,#0b1527, #0a1220); border:1px solid #1e2a3a; border-radius:16px; padding:16px;
-      box-shadow:0 20px 50px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04)}
-
+    .card{background:linear-gradient(180deg,#0b1527, #0a1220); border:1px solid #1e2a3a; border-radius:16px; padding:16px; box-shadow:0 20px 50px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04)}
     .grid{display:grid; grid-template-columns: 1fr; gap:16px}
-    @media (min-width:860px){ .grid{ grid-template-columns: 1fr 320px; } }
-
-    /* Compass */
+    @media (min-width:860px){ .grid{ grid-template-columns: 1fr 360px; } }
     .compassBox{display:grid; place-items:center; padding:10px}
-    .compass{ position:relative; width:min(80vmin,520px); aspect-ratio:1; border-radius:50%;
-      background: radial-gradient(60% 60% at 50% 50%, #0f1d34 0%, #0b1220 55%),
-                  conic-gradient(from 0deg, #0c1a2f, #0c1a2f);
-      border: 10px solid var(--ring); outline: 1px solid #263447; box-shadow: inset 0 0 0 2px var(--ring2), 0 10px 30px rgba(0,0,0,.4);
-      overflow:hidden;
-    }
+    .compass{ position:relative; width:min(80vmin,520px); aspect-ratio:1; border-radius:50%; background: radial-gradient(60% 60% at 50% 50%, #0f1d34 0%, #0b1220 55%), conic-gradient(from 0deg, #0c1a2f, #0c1a2f); border: 10px solid var(--ring); outline: 1px solid #263447; box-shadow: inset 0 0 0 2px var(--ring2), 0 10px 30px rgba(0,0,0,.4); overflow:hidden; }
     .rose{ position:absolute; inset:0; display:grid; place-items:center; transition: transform .08s ease-out; }
     .ticks{ position:absolute; inset:12px; }
     .tick{ position:absolute; left:50%; top:0; width:2px; height:12px; background:var(--tick); transform-origin:center calc(50% + 200px); opacity:.8 }
     .tick.big{ height:20px; background:#6b88a6 }
-
     .labels{ position:absolute; inset:0; display:grid; place-items:center; font-weight:700; letter-spacing:.08em }
     .labels span{ position:absolute; color:#b9cadd }
     .labels .N{ top:12px; color:var(--north); font-size:22px }
     .labels .E{ right:12px }
     .labels .S{ bottom:12px }
     .labels .W{ left:12px }
-
-    /* Needle */
     .needleWrap{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none }
     .needle{ position:absolute; width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent; border-bottom:140px solid var(--needle); filter: drop-shadow(0 6px 8px rgba(0,0,0,.4)); transform-origin:50% calc(100% - 6px); transition: transform .08s ease-out }
     .pivot{ position:absolute; width:16px; height:16px; border-radius:999px; background:#1e2a3c; border:2px solid #2a3b52; box-shadow: inset 0 0 0 3px #101826 }
-
-    /* Readout */
-    .readout{display:grid; gap:8px}
+    .readout{display:grid; gap:10px}
     .value{font-size:42px; font-weight:700}
     .meta{font-size:13px; color:var(--muted)}
-
-    .controls{display:flex; gap:8px; flex-wrap:wrap}
+    .controls{display:grid; gap:8px}
+    .row{display:flex; gap:8px; flex-wrap:wrap}
     button{appearance:none; cursor:pointer; border:1px solid #2a3a51; background:linear-gradient(180deg,#162742,#0f2037); color:var(--text); padding:10px 12px; border-radius:10px; font-weight:600}
     button:hover{filter:brightness(1.05)}
     button:active{transform:translateY(1px)}
+    input[type=range]{width:100%}
+    .rangeRow{display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center}
+    .badge{display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #2a3a51; font-size:12px; color:var(--muted)}
   </style>
 </head>
 <body>
@@ -87,18 +71,28 @@
       </div>
 
       <div class="card readout">
-        <div>
-          <div class="meta">Heading</div>
-          <div class="value" id="headingVal">–°</div>
-        </div>
+        <div class="rangeRow"><div class="meta">Heading</div><span class="badge" id="qual">—</span></div>
+        <div class="value" id="headingVal">–°</div>
         <div class="meta" id="dirVal">–</div>
         <div class="meta" id="accVal">Accuracy: –</div>
         <div class="controls">
-          <button id="btnStart">Start</button>
-          <button id="btnStop">Stop</button>
-          <button id="btnCalib">Calibrate tip</button>
+          <div class="row">
+            <button id="btnStart">Start</button>
+            <button id="btnStop">Stop</button>
+            <button id="btnCalib">Calibrate tip</button>
+          </div>
+          <div class="rangeRow">
+            <label for="smooth">Smoothing</label>
+            <span id="smoothVal">0.70</span>
+          </div>
+          <input id="smooth" type="range" min="0" max="1" step="0.01" value="0.70" />
+          <div class="rangeRow">
+            <label for="deadband">Deadband (°)</label>
+            <span id="deadbandVal">1.0</span>
+          </div>
+          <input id="deadband" type="range" min="0" max="3" step="0.1" value="1" />
         </div>
-        <div class="meta">Tip: hold your phone flat and away from metal/magnets. For best results, make a gentle “figure‑8” motion to calibrate.</div>
+        <div class="meta">Tips: hold phone flat; avoid metal/magnets; do a gentle “figure‑8”. On iOS grant Motion access when asked.</div>
       </div>
     </div>
   </div>
@@ -108,13 +102,18 @@
     const headingEl = document.getElementById('headingVal');
     const dirEl = document.getElementById('dirVal');
     const accEl = document.getElementById('accVal');
+    const qualEl = document.getElementById('qual');
     const rose = document.getElementById('rose');
     const needle = document.getElementById('needle');
 
-    // Build tick marks (every 10°, big every 30°)
+    const smoothSlider = document.getElementById('smooth');
+    const smoothVal = document.getElementById('smoothVal');
+    const deadbandSlider = document.getElementById('deadband');
+    const deadbandVal = document.getElementById('deadbandVal');
+
+    // Build tick marks
     (function buildTicks(){
       const ctn = document.getElementById('ticks');
-      const R = ctn.clientWidth/2; // approximate
       for (let i=0;i<360;i+=10){
         const t = document.createElement('div');
         t.className = 'tick' + (i%30===0 ? ' big':'');
@@ -130,75 +129,127 @@
       const idx = Math.round(((h%360)+360)%360 / 22.5) % 16;
       return dirs[idx];
     }
+    const norm = d => (d%360+360)%360;
 
-    // Smooth heading changes with wrap-around handling
-    let smoothed = null;
-    function smooth(prev, next, factor){
-      if (prev==null || !isFinite(prev)) return next;
-      let diff = ((next - prev + 540) % 360) - 180; // shortest path
-      return (prev + diff * factor + 360) % 360;
+    // Circular mean helper (handles wrap-around at 0/360)
+    function circularMean(degArray){
+      if (!degArray.length) return null;
+      let x=0, y=0; for (const d of degArray){ const r = d*Math.PI/180; x += Math.cos(r); y += Math.sin(r); }
+      return norm(Math.atan2(y, x) * 180/Math.PI);
     }
 
+    // Adaptive smoothing parameters
+    let windowSize = 24;      // samples for circular mean
+    let baseAlpha = 0.08;     // EMA blend (lower = steadier)
+    let deadband = 1.0;       // degrees below which we ignore change
+    let maxRate = 180;        // deg/sec cap to prevent snapping
+
+    // Update from UI
+    function applyUI(){
+      const s = parseFloat(smoothSlider.value); // 0..1; 1 = very smooth
+      smoothVal.textContent = s.toFixed(2);
+      // Map smoothing to parameters
+      windowSize = Math.round(5 + s * 45);            // 5..50
+      baseAlpha  = 0.35 - s * 0.31;                    // 0.35..0.04
+      deadband   = 0 + s * 1.5;                        // 0..1.5°
+      deadbandVal.textContent = deadband.toFixed(1);
+    }
+    applyUI();
+    smoothSlider.addEventListener('input', applyUI);
+    deadbandSlider.addEventListener('input', ()=>{ deadband = parseFloat(deadbandSlider.value); deadbandVal.textContent = deadband.toFixed(1); });
+
+    // Buffers
+    const samples = []; // recent headings
+    const maxSamples = 64;
+
+    let smoothed = null;
+    let lastTime = performance.now();
+
     function updateUI(heading, accuracy){
-      // Rotate the ROSE opposite to heading so N stays at the top visually
-      rose.style.transform = `rotate(${-heading}deg)`;
-      // Optionally rotate a needle to indicate north
+      rose.style.transform = `rotate(${-heading}deg)`;           // keep N top
       needle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
       headingEl.textContent = `${fmt(heading)}° ${cardinal(heading)}`;
       accEl.textContent = accuracy!=null ? `Accuracy: ±${Math.round(accuracy)}°` : 'Accuracy: –';
     }
 
     function screenAngle(){
-      let ang = 0;
-      if (screen.orientation && typeof screen.orientation.angle === 'number') ang = screen.orientation.angle;
-      else if (typeof window.orientation === 'number') ang = window.orientation;
-      return ang || 0;
+      let ang = 0; if (screen.orientation && typeof screen.orientation.angle === 'number') ang = screen.orientation.angle; else if (typeof window.orientation === 'number') ang = window.orientation; return ang||0;
     }
 
+    // Motion awareness to loosen smoothing while turning
+    let turningBoost = 0; // 0..1
+    window.addEventListener('devicemotion', (e)=>{
+      const r = e.rotationRate || {}; // deg/s
+      const mag = Math.hypot(r.alpha||0, r.beta||0, r.gamma||0);
+      // Map rotation magnitude to 0..1 within 0..200 deg/s
+      turningBoost = Math.max(0, Math.min(1, mag/200));
+    }, true);
+
     function computeHeadingFromEvent(e){
-      // iOS provides true heading via webkitCompassHeading when available
       if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
-        return { heading: e.webkitCompassHeading, accuracy: e.webkitCompassAccuracy };
+        const acc = (typeof e.webkitCompassAccuracy === 'number') ? e.webkitCompassAccuracy : null;
+        return { heading: e.webkitCompassHeading, accuracy: acc, source: 'ios' };
       }
-      // Otherwise derive from alpha (0..360, device yaw). On many Android devices heading ~= 360 - alpha.
       if (typeof e.alpha === 'number'){
-        let h = 360 - e.alpha; // invert to match compass bearing
-        // Adjust for screen rotation so 0° aligns with the top of the screen
+        let h = 360 - e.alpha; // yaw -> bearing
         h -= screenAngle();
-        h = (h % 360 + 360) % 360;
-        return { heading: h, accuracy: null };
+        h = norm(h);
+        return { heading: h, accuracy: null, source: 'generic' };
       }
       return { heading: null, accuracy: null };
     }
 
-    let running = false;
-    let listenerType = null;
-    let rafId = null; // throttle updates to animation frames
+    function pushSample(h){
+      samples.push(h); while (samples.length > maxSamples) samples.shift();
+    }
+
+    function stabilizedHeading(raw){
+      pushSample(raw);
+      // Use last windowSize samples
+      const arr = samples.slice(-windowSize);
+      const mean = circularMean(arr);
+      if (smoothed==null) return mean;
+      // EMA with wrap handling
+      const now = performance.now();
+      const dt = Math.max(0.001, (now - lastTime)/1000);
+      lastTime = now;
+      const diff = ((mean - smoothed + 540) % 360) - 180; // shortest path
+      const alpha = baseAlpha + turningBoost * 0.25;      // loosen smoothing while turning
+      let next = smoothed + diff * alpha;
+      // Deadband + max rate
+      const maxStep = maxRate * dt; // deg
+      const step = Math.max(-maxStep, Math.min(maxStep, ((next - smoothed + 540)%360)-180));
+      if (Math.abs(step) < deadband) return smoothed; // ignore tiny wobbles
+      return norm(smoothed + step);
+    }
+
+    let running = false; let rafId = null;
 
     function onOrientation(e){
-      const { heading, accuracy } = computeHeadingFromEvent(e);
+      const { heading, accuracy, source } = computeHeadingFromEvent(e);
       if (heading==null) return;
-      smoothed = smooth(smoothed, heading, 0.18); // smoothing factor
-      if (!rafId){
-        rafId = requestAnimationFrame(()=>{
-          rafId = null;
-          updateUI(smoothed, accuracy);
-        });
+      // If iOS reports very poor accuracy (e.g., > 25°), skip update
+      if (source==='ios' && typeof accuracy==='number' && accuracy>25){
+        qualEl.textContent = 'low'; qualEl.style.color = '#f59e0b';
+        return;
       }
+      qualEl.textContent = 'ok'; qualEl.style.color = '#90f';
+
+      const h = stabilizedHeading(heading);
+      if (!rafId){
+        rafId = requestAnimationFrame(()=>{ rafId = null; updateUI(h, accuracy); });
+      }
+      smoothed = h;
     }
 
     async function start(){
       try{
-        // iOS 13+ requires explicit permission
         const needsPerm = typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function';
         if (needsPerm){
           const res = await DeviceOrientationEvent.requestPermission();
           if (res !== 'granted') { setStatus('Motion permission denied'); return; }
         }
-        // Prefer absolute event if available
         window.addEventListener('deviceorientationabsolute', onOrientation, true);
-        listenerType = 'deviceorientationabsolute';
-        // Also listen to generic as fallback
         window.addEventListener('deviceorientation', onOrientation, true);
         running = true; setStatus('Compass running');
       }catch(err){ setStatus('Error starting: '+err.message); }
@@ -213,18 +264,19 @@
     document.getElementById('btnStart').addEventListener('click', start);
     document.getElementById('btnStop').addEventListener('click', stop);
     document.getElementById('btnCalib').addEventListener('click', ()=>{
-      alert('Calibration tip:\n\n1) Hold the phone flat.\n2) Move it in a gentle figure‑8.\n3) Keep away from magnets/metal.\n4) Ensure Location Services and Motion access are enabled.');
+      alert('Calibration tip:
+
+1) Hold the phone flat.
+2) Move it in a gentle figure‑8.
+3) Keep away from magnets/metal.
+4) Ensure Location Services and Motion access are enabled.');
     });
 
-    // Update when screen rotates
-    (screen.orientation || window).addEventListener?.('change', ()=>{
-      if (smoothed!=null) updateUI(smoothed, null);
-    });
+    // Update on screen rotation
+    (screen.orientation || window).addEventListener?.('change', ()=>{ if (smoothed!=null) updateUI(smoothed, null); });
 
-    // HTTPS / support hints
-    if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)){
-      setStatus('Open over HTTPS (or localhost) to access motion sensors.');
-    }
+    // HTTPS hint
+    if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) setStatus('Open over HTTPS (or localhost) to access motion sensors.');
   </script>
 </body>
 </html>
