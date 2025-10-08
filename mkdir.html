@@ -3,227 +3,196 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>AR Plane Hit-Test • Floating Cube</title>
+  <title>A‑Frame WebXR Hit‑Test • Plane Detection + Tap‑to‑Place</title>
   <style>
-    html, body { height: 100%; margin: 0; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b0b0b; color:#fff; }
-    #overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; pointer-events: none; }
-    .ui { pointer-events: auto; display:flex; flex-direction:column; gap:12px; align-items:center; text-align:center; }
-    .btn { appearance:none; border:0; border-radius:16px; padding:14px 18px; font-weight:700; font-size:16px; cursor:pointer; box-shadow: 0 10px 24px rgba(0,0,0,.35); }
-    .btn.primary { background:#35c759; color:#000; }
-    .note { opacity:.85; font-size:14px; max-width: 520px; }
-    #reticleTip { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.15); padding: 8px 12px; border-radius: 12px; display:none; }
-    #tapHint { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.15); padding: 8px 12px; border-radius: 12px; display:none; }
+    html, body { height: 100%; margin: 0; background: #000; }
+    .overlay { position: fixed; inset: env(safe-area-inset-top) 0 auto 0; display: flex; justify-content: center; padding: 12px; z-index: 10; pointer-events: none; }
+    .panel { pointer-events: auto; background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px; border-radius: 10px; font-family: system-ui, sans-serif; font-size: 14px; display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px); }
+    .panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+    .hint { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; background: rgba(0,0,0,.55); color: #fff; border: 1px solid rgba(255,255,255,.15); padding: 8px 12px; border-radius: 12px; z-index: 9; display:none; }
+    #error { position: fixed; top: 12px; right: 12px; max-width: 380px; background: #2a1b1b; border:1px solid #844; padding:12px; border-radius:12px; display:none; white-space:pre-wrap; color:#fff; z-index: 20; font: 14px/1.3 system-ui, sans-serif; }
+    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+    /* Simple reticle */
+    .reticle { width: 64px; height: 64px; border: 2px solid rgba(255,255,255,.9); border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,.2) inset; }
   </style>
+
+  <!-- A‑Frame core -->
+  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
 </head>
 <body>
-  <div id="overlay">
-    <div class="ui">
-      <h1 style="margin:0;font-size:22px;">Floating Cube on Your Table (AR)</h1>
-      <button id="enterAR" class="btn primary">▶ Start AR</button>
-      <button id="grantCam" class="btn secondary">Allow Camera (pre-check)</button>
-      <div class="note">
-        Troubleshooting tips:
-        <ul style="text-align:left; margin:8px 0 0 0; padding-left:18px; opacity:.9">
-          <li>Use HTTPS or <code>localhost</code>.</li>
-          <li>Use Chrome on Android or Safari on iOS 17+.</li>
-          <li>When prompted, allow camera & AR permissions.</li>
-          <li>If embedded in an iframe, it must include <code>allow=\"camera; xr-spatial-tracking\"</code>.</li>
-        </ul>
-      </div>
+  <div id="error"></div>
+
+  <div class="overlay">
+    <div class="panel">
+      <span id="status">Move your phone slowly to detect a surface. Tap to place the object.</span>
+      <button id="precam">Allow Camera</button>
+      <button id="enter">Start AR</button>
     </div>
   </div>
-  <div id="reticleTip">Surface found ✅ — tap to place the cube</div>
-  <div id="tapHint">Tip: slowly move your phone to help detect the surface</div>
-  <div id="errorBox"></div>
 
-  <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-    import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
+  <div id="hint" class="hint">Surface found ✅ — tap to place</div>
 
-    let renderer, scene, camera;
-    let reticle, hitTestSource = null, hitTestSourceRequested = false, xrRefSpace;
-    let cube = null; // placed object
-    let clock = new THREE.Clock();
+  <a-scene id="scene" embedded vr-mode-ui="enabled: false"
+           renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
+           webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: .overlay"
+  >
+    <a-assets>
+      <!-- Swap this for your own GLB/GLTF if desired -->
+      <a-asset-item id="model" src="cube.glb"></a-asset-item>
+    </a-assets>
 
-    const overlay = document.getElementById('overlay');
-    const enterBtn = document.getElementById('enterAR');
-    const grantCamBtn = document.getElementById('grantCam');
-    const reticleTip = document.getElementById('reticleTip');
-    const tapHint = document.getElementById('tapHint');
-    const errorBox = document.getElementById('errorBox');
+    <!-- Lighting (AR often benefits from simple lights) -->
+    <a-entity light="type: ambient; intensity: 0.9"></a-entity>
+    <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
 
-    function showError(msg) {
-      console.error(msg);
-      errorBox.textContent = typeof msg === 'string' ? msg : (msg?.message || String(msg));
-      errorBox.style.display = 'block';
-    }
+    <!-- The reticle entity (hidden by default). We'll update its matrix from WebXR hit‑test. -->
+    <a-entity id="reticle" visible="false" rotation="-90 0 0">
+      <a-ring radius-inner="0.085" radius-outer="0.1" color="#ffffff" material="opacity: 0.9; transparent: true"></a-ring>
+    </a-entity>
 
-    // Basic setup
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
+    <!-- Holder for the placed content -->
+    <a-entity id="placed"></a-entity>
+  </a-scene>
 
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+  <script>
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+    const hintEl = document.getElementById('hint');
+    const precamBtn = document.getElementById('precam');
+    const enterBtn = document.getElementById('enter');
+    const sceneEl = document.getElementById('scene');
 
-    // Lighting that works well for AR
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-    scene.add(hemi);
-    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
-    dir.position.set(0.5, 1, 0.5);
-    scene.add(dir);
+    function showError(msg){ console.error(msg); errorEl.textContent = (msg?.message||msg); errorEl.style.display = 'block'; }
+    function setStatus(msg){ statusEl.textContent = msg; }
 
-    // Reticle (shows where the plane hit-test intersects)
-    reticle = new THREE.Mesh(
-      new THREE.RingGeometry(0.09, 0.1, 32).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
-    );
-    reticle.matrixAutoUpdate = false;
-    reticle.visible = false;
-    scene.add(reticle);
+    // Pre‑flight camera permission (helps some browsers show a clearer prompt before WebXR)
+    precamBtn.addEventListener('click', async () => {
+      try{
+        if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+          showError('Use HTTPS or localhost for camera access.'); return;
+        }
+        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        s.getTracks().forEach(t=>t.stop());
+        setStatus('Camera permission granted ✅');
+      }catch(e){ showError('Camera permission failed: ' + (e?.message||e)); }
+    });
 
-    // Enter AR on button click (custom to control UI)
+    // Custom component that performs WebXR hit‑test and tap‑to‑place
+    AFRAME.registerComponent('xr-hit-test', {
+      init(){
+        this.hitTestSource = null;
+        this.viewerSpace = null;
+        this.refSpace = null;
+        this.reticle = document.querySelector('#reticle');
+        this.placed = document.querySelector('#placed');
+        this.modelURL = document.querySelector('#model')?.getAttribute('src') || null;
+
+        // On session start, set up hit‑test
+        this.onSessionStart = async () => {
+          const xr = this.el.renderer.xr;
+          const session = xr.getSession();
+          try{
+            this.viewerSpace = await session.requestReferenceSpace('viewer');
+            this.refSpace = await xr.getReferenceSpace();
+            this.hitTestSource = await session.requestHitTestSource({ space: this.viewerSpace });
+            hintEl.style.display = 'block';
+            setStatus('Move phone to find a surface. Tap to place.');
+          }catch(e){ showError('Hit-test init failed: ' + (e?.message||e)); }
+
+          const onSelect = () => {
+            if (!this.reticle.getAttribute('visible')) return;
+            // Remove previous object if any
+            while (this.placed.firstChild) this.placed.removeChild(this.placed.firstChild);
+            // Place a model slightly above plane to look floating
+            const holder = document.createElement('a-entity');
+            if (this.modelURL) {
+              const obj = document.createElement('a-entity');
+              obj.setAttribute('gltf-model', '#model');
+              obj.setAttribute('scale', '0.25 0.25 0.25');
+              obj.setAttribute('shadow', 'cast: true; receive: true');
+              holder.appendChild(obj);
+            } else {
+              // Fallback cube geometry
+              const cube = document.createElement('a-box');
+              cube.setAttribute('depth', '0.15');
+              cube.setAttribute('height', '0.15');
+              cube.setAttribute('width', '0.15');
+              cube.setAttribute('color', '#39ff88');
+              holder.appendChild(cube);
+            }
+            // Lift a little (8cm)
+            const p = this.reticle.object3D.position.clone();
+            holder.object3D.position.copy(p.add(new THREE.Vector3(0, 0.08, 0)));
+            holder.object3D.quaternion.copy(this.reticle.object3D.quaternion);
+            // gentle float animation
+            holder.setAttribute('animation', 'property: position; dir: alternate; dur: 1200; easing: easeInOutSine; loop: true; to: 0 0.1 0');
+            this.placed.appendChild(holder);
+          };
+          session.addEventListener('select', onSelect);
+
+          // On end, clean up
+          this.onSessionEnd = () => {
+            hintEl.style.display = 'none';
+            this.hitTestSource = null; this.viewerSpace = null; this.refSpace = null;
+          };
+          session.addEventListener('end', this.onSessionEnd);
+        };
+
+        this.el.renderer.xr.addEventListener('sessionstart', this.onSessionStart);
+      },
+      tick(){
+        const xr = this.el.renderer?.xr;
+        const session = xr && xr.getSession && xr.getSession();
+        if (!session || !this.hitTestSource) return;
+        const frame = xr.getFrame();
+        if (!frame) return;
+        const results = frame.getHitTestResults(this.hitTestSource);
+        if (results.length) {
+          const hit = results[0];
+          const pose = hit.getPose(this.refSpace);
+          this.reticle.object3D.matrix.fromArray(pose.transform.matrix);
+          this.reticle.object3D.matrix.decompose(this.reticle.object3D.position, this.reticle.object3D.quaternion, this.reticle.object3D.scale);
+          this.reticle.setAttribute('visible', true);
+          hintEl.style.display = 'block';
+        } else {
+          this.reticle.setAttribute('visible', false);
+          hintEl.style.display = 'none';
+        }
+      }
+    });
+
+    // Attach the component once the renderer is ready
+    sceneEl.addEventListener('loaded', () => {
+      // Basic environment checks
+      if (!('xr' in navigator)) {
+        showError('WebXR not available. Use Chrome on Android or Safari on iOS 17+.');
+      }
+      sceneEl.setAttribute('xr-hit-test', '');
+    });
+
+    // Manual start button helps on iOS (gesture requirement)
     enterBtn.addEventListener('click', async () => {
-      try {
-        if (!('xr' in navigator)) {
-          showError('WebXR not available. Use a supported browser (Chrome Android or Safari iOS 17+).');
-          return;
+      try{
+        if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+          showError('Use HTTPS or localhost for camera access.'); return;
         }
-        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-          showError('This page must be served over HTTPS (or localhost) to access the camera.');
-          return;
-        }
-        const supported = await navigator.xr.isSessionSupported('immersive-ar');
-        if (!supported) {
-          showError('AR session not supported on this device/browser. Update your OS/browser or try another device.');
-          return;
-        }
-        const arBtn = ARButton.createButton(renderer, {
+        if (!('xr' in navigator)) { showError('WebXR not available on this browser/device.'); return; }
+        const ok = await navigator.xr.isSessionSupported('immersive-ar');
+        if (!ok) { showError('immersive-ar session not supported here.'); return; }
+        // A‑Frame will start AR when user hits the built-in AR button, but we can force it:
+        sceneEl.renderer.xr.setSession(await navigator.xr.requestSession('immersive-ar', {
           requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay', 'light-estimation'],
+          optionalFeatures: ['dom-overlay'],
           domOverlay: { root: document.body }
-        });
-        arBtn.click();
-        overlay.style.display = 'none';
-        tapHint.style.display = 'block';
-      } catch (e) {
-        showError(e);
-      }
+        }));
+        setStatus('AR session started.');
+      }catch(e){ showError(e); }
     });
 
-      // Trigger session start via the ARButton internal handler
-      arBtn.click();
-
-      overlay.style.display = 'none';
-      tapHint.style.display = 'block';
-    });
-
-    // Place cube at the reticle on user tap
-    function onSelect() {
-      if (!reticle.visible) return;
-      if (cube) scene.remove(cube);
-
-      const size = 0.15;
-      const geo = new THREE.BoxGeometry(size, size, size);
-      const mat = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.4 });
-      cube = new THREE.Mesh(geo, mat);
-
-      // Extract pose from reticle and lift cube slightly to make it float above the table
-      const pose = new THREE.Matrix4();
-      pose.copy(reticle.matrix);
-
-      // Decompose to position/quaternion/scale to easily add Y offset
-      const pos = new THREE.Vector3();
-      const quat = new THREE.Quaternion();
-      const scl = new THREE.Vector3();
-      pose.decompose(pos, quat, scl);
-
-      pos.y += 0.08; // float ~8cm above the surface
-      cube.position.copy(pos);
-      cube.quaternion.copy(quat);
-
-      scene.add(cube);
+    // Status hint for HTTPS
+    if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+      setStatus('Use HTTPS or localhost for camera access.');
     }
-
-    // Pre-flight camera permission (some browsers show clearer prompts with getUserMedia)
-    grantCamBtn.addEventListener('click', async () => {
-      try {
-        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-          showError('Enable HTTPS (or use localhost) before granting camera permissions.');
-          return;
-        }
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        stream.getTracks().forEach(t => t.stop());
-        grantCamBtn.textContent = 'Camera access granted ✅';
-      } catch (e) {
-        showError('Camera permission failed: ' + (e?.message || e));
-      }
-    });
-
-    renderer.xr.addEventListener('sessionstart', () => {
-      const session = renderer.xr.getSession();
-      session.addEventListener('select', onSelect);
-    });
-
-    renderer.xr.addEventListener('sessionend', () => {
-      hitTestSourceRequested = false;
-      hitTestSource = null;
-      reticle.visible = false;
-      tapHint.style.display = 'none';
-      reticleTip.style.display = 'none';
-    });
-
-    // Animation loop (also does hit-test requests)
-    renderer.setAnimationLoop(render);
-
-    async function render(timestamp, frame) {
-      // Gentle bob on cube if placed
-      if (cube) {
-        const t = clock.getElapsedTime();
-        cube.position.y += Math.sin(t * 2.0) * 0.0008; // subtle float
-        cube.rotation.y += 0.003; // slow spin
-      }
-
-      if (frame) {
-        const session = renderer.xr.getSession();
-
-        if (!hitTestSourceRequested) {
-          const viewerSpace = await session.requestReferenceSpace('viewer');
-          hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
-          xrRefSpace = await renderer.xr.getReferenceSpace();
-          hitTestSourceRequested = true;
-        }
-
-        if (hitTestSource) {
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-          if (hitTestResults.length) {
-            const hit = hitTestResults[0];
-            const pose = hit.getPose(xrRefSpace);
-            reticle.visible = true;
-            reticle.matrix.fromArray(pose.transform.matrix);
-            reticleTip.style.display = 'block';
-            tapHint.style.display = 'none';
-          } else {
-            reticle.visible = false;
-            reticleTip.style.display = 'none';
-          }
-        }
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    // Resize handler
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
   </script>
 </body>
 </html>
-
