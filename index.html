@@ -85,7 +85,7 @@
     .value { display: block; padding: 8px 10px; border-radius: 10px; background: #0b1220; border: 1px solid var(--border); }
 
     .result {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center;
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center;
       padding: 8px 10px; border-radius: 12px; background: #0b1220; border: 1px solid var(--border);
     }
     .result strong { font-size: 20px; }
@@ -93,9 +93,7 @@
     footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 6px; }
     .small { font-size: 12px; color: var(--muted); }
     .hr { height: 1px; background: var(--border); margin: 12px 0; border-radius: 999px; }
-    .copy {
-      position: relative;
-    }
+    .copy { position: relative; }
     .copy button {
       position: absolute; right: 6px; top: 6px; width: auto; padding: 6px 8px; font-size: 12px;
       background: #0f223a; border-color: #243449;
@@ -152,7 +150,7 @@
       <!-- DISTANCE -->
       <section class="card" aria-labelledby="distanceHdr">
         <h2 id="distanceHdr">Distance Calculator</h2>
-        <p class="sub">Compute great‑circle distance (Haversine) between two points.</p>
+        <p class="sub">Compute great‑circle distance (Haversine) between two points and get the direction to walk.</p>
         <div class="btn-row" style="margin-bottom:8px">
           <button id="useCurrentForA">Use current → Point A</button>
           <button id="useCurrentForB">Use current → Point B</button>
@@ -187,8 +185,9 @@
               <option value="nm">Nautical miles</option>
             </select>
           </div>
-          <div style="display:flex; align-items:end;">
+          <div style="display:flex; align-items:end; gap:10px;">
             <button id="btnCalc">Calculate distance</button>
+            <button id="btnAuto">Toggle auto‑update</button>
           </div>
         </div>
         <div class="hr"></div>
@@ -200,6 +199,10 @@
           <div>
             <div class="small">Bearing (initial)</div>
             <strong id="outBear">–</strong>
+          </div>
+          <div>
+            <div class="small">Direction to walk (A → B)</div>
+            <strong id="outDir">–</strong>
           </div>
         </div>
       </section>
@@ -266,6 +269,16 @@
       }
     }
 
+    // NEW — Convert numeric bearing to human-friendly cardinal phrase
+    function bearingToCardinal(bearing) {
+      const dirs = [
+        'North', 'North-East', 'East', 'South-East',
+        'South', 'South-West', 'West', 'North-West'
+      ];
+      const ix = Math.round(bearing / 45) % 8;
+      return dirs[ix];
+    }
+
     // --- Geolocation logic ---
     let watchId = null;
 
@@ -316,7 +329,7 @@
     });
 
     // Copy buttons
-    $$("[data-copy-target]").forEach(btn => {
+    $$('[data-copy-target]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const target = btn.getAttribute('data-copy-target');
         const el = $(target);
@@ -346,18 +359,32 @@
       if (!vals) {
         $('#outDist').textContent = '–';
         $('#outBear').textContent = '–';
+        $('#outDir').textContent = '–';
         return;
       }
       const dMeters = haversine(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
       const bearing = initialBearing(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
       const unit = $('#units').value;
       const converted = convertDistance(dMeters, unit);
+
       $('#outDist').textContent = `${fmtNum(converted, unit==='m'?0:3)} ${unit}`;
       $('#outBear').textContent = `${fmtNum(bearing, 1)}°`;
+      $('#outDir').textContent = `${bearingToCardinal(bearing)} (${fmtNum(bearing,1)}°)`;
     }
 
     $('#btnCalc').addEventListener('click', updateDistance);
     $('#units').addEventListener('change', updateDistance);
+
+    // Optional: auto-update on input changes (toggle button)
+    let auto = false;
+    $('#btnAuto').addEventListener('click', () => {
+      auto = !auto;
+      $('#btnAuto').textContent = auto ? 'Auto‑update: ON' : 'Toggle auto‑update';
+      if (auto) updateDistance();
+    });
+    ;['#aLat','#aLng','#bLat','#bLng'].forEach(sel => {
+      $(sel).addEventListener('input', () => { if (auto) updateDistance(); });
+    });
 
     // Quick-fill current location to A/B
     function fillCurrentInto(target) {
