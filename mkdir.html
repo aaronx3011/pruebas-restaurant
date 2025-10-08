@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>AR Plane Hit-Test • Floating Cube</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b0b0b; color:#fff; }
+    #overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; pointer-events: none; }
+    .ui { pointer-events: auto; display:flex; flex-direction:column; gap:12px; align-items:center; text-align:center; }
+    .btn { appearance:none; border:0; border-radius:16px; padding:14px 18px; font-weight:700; font-size:16px; cursor:pointer; box-shadow: 0 10px 24px rgba(0,0,0,.35); }
+    .btn.primary { background:#35c759; color:#000; }
+    .note { opacity:.85; font-size:14px; max-width: 520px; }
+    #reticleTip { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.15); padding: 8px 12px; border-radius: 12px; display:none; }
+    #tapHint { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.15); padding: 8px 12px; border-radius: 12px; display:none; }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div class="ui">
+      <h1 style="margin:0;font-size:22px;">Floating Cube on Your Table (AR)</h1>
+      <button id="enterAR" class="btn primary">▶ Start AR</button>
+      <div class="note">Move your phone slowly to let it detect a flat surface (like a table or floor). A ring will appear where a surface is found. Tap to place a floating cube.</div>
+    </div>
+  </div>
+  <div id="reticleTip">Surface found ✅ — tap to place the cube</div>
+  <div id="tapHint">Tip: slowly move your phone to help detect the surface</div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
+
+    let renderer, scene, camera;
+    let reticle, hitTestSource = null, hitTestSourceRequested = false, xrRefSpace;
+    let cube = null; // placed object
+    let clock = new THREE.Clock();
+
+    const overlay = document.getElementById('overlay');
+    const enterBtn = document.getElementById('enterAR');
+    const reticleTip = document.getElementById('reticleTip');
+    const tapHint = document.getElementById('tapHint');
+
+    // Basic setup
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+    // Lighting that works well for AR
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+    dir.position.set(0.5, 1, 0.5);
+    scene.add(dir);
+
+    // Reticle (shows where the plane hit-test intersects)
+    reticle = new THREE.Mesh(
+      new THREE.RingGeometry(0.09, 0.1, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
+    );
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+    scene.add(reticle);
+
+    // Enter AR on button click (custom to control UI)
+    enterBtn.addEventListener('click', async () => {
+      if (!navigator.xr) {
+        alert('WebXR not available on this device/browser. Use Chrome/Android or Safari/iOS 17+ with AR enabled.');
+        return;
+      }
+
+      // Build a custom AR button to pass options
+      const arBtn = ARButton.createButton(renderer, {
+        requiredFeatures: ['hit-test'], // plane-like placement via hit-test
+        optionalFeatures: ['dom-overlay', 'light-estimation'],
+        domOverlay: { root: document.body }
+      });
+
+      // Trigger session start via the ARButton internal handler
+      arBtn.click();
+
+      overlay.style.display = 'none';
+      tapHint.style.display = 'block';
+    });
+
+    // Place cube at the reticle on user tap
+    function onSelect() {
+      if (!reticle.visible) return;
+      if (cube) scene.remove(cube);
+
+      const size = 0.15;
+      const geo = new THREE.BoxGeometry(size, size, size);
+      const mat = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.4 });
+      cube = new THREE.Mesh(geo, mat);
+
+      // Extract pose from reticle and lift cube slightly to make it float above the table
+      const pose = new THREE.Matrix4();
+      pose.copy(reticle.matrix);
+
+      // Decompose to position/quaternion/scale to easily add Y offset
+      const pos = new THREE.Vector3();
+      const quat = new THREE.Quaternion();
+      const scl = new THREE.Vector3();
+      pose.decompose(pos, quat, scl);
+
+      pos.y += 0.08; // float ~8cm above the surface
+      cube.position.copy(pos);
+      cube.quaternion.copy(quat);
+
+      scene.add(cube);
+    }
+
+    renderer.xr.addEventListener('sessionstart', () => {
+      const session = renderer.xr.getSession();
+      session.addEventListener('select', onSelect);
+    });
+
+    renderer.xr.addEventListener('sessionend', () => {
+      hitTestSourceRequested = false;
+      hitTestSource = null;
+      reticle.visible = false;
+      tapHint.style.display = 'none';
+      reticleTip.style.display = 'none';
+    });
+
+    // Animation loop (also does hit-test requests)
+    renderer.setAnimationLoop(render);
+
+    async function render(timestamp, frame) {
+      // Gentle bob on cube if placed
+      if (cube) {
+        const t = clock.getElapsedTime();
+        cube.position.y += Math.sin(t * 2.0) * 0.0008; // subtle float
+        cube.rotation.y += 0.003; // slow spin
+      }
+
+      if (frame) {
+        const session = renderer.xr.getSession();
+
+        if (!hitTestSourceRequested) {
+          const viewerSpace = await session.requestReferenceSpace('viewer');
+          hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+          xrRefSpace = await renderer.xr.getReferenceSpace();
+          hitTestSourceRequested = true;
+        }
+
+        if (hitTestSource) {
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+          if (hitTestResults.length) {
+            const hit = hitTestResults[0];
+            const pose = hit.getPose(xrRefSpace);
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose.transform.matrix);
+            reticleTip.style.display = 'block';
+            tapHint.style.display = 'none';
+          } else {
+            reticle.visible = false;
+            reticleTip.style.display = 'none';
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // Resize handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
