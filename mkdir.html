@@ -21,11 +21,21 @@
     <div class="ui">
       <h1 style="margin:0;font-size:22px;">Floating Cube on Your Table (AR)</h1>
       <button id="enterAR" class="btn primary">▶ Start AR</button>
-      <div class="note">Move your phone slowly to let it detect a flat surface (like a table or floor). A ring will appear where a surface is found. Tap to place a floating cube.</div>
+      <button id="grantCam" class="btn secondary">Allow Camera (pre-check)</button>
+      <div class="note">
+        Troubleshooting tips:
+        <ul style="text-align:left; margin:8px 0 0 0; padding-left:18px; opacity:.9">
+          <li>Use HTTPS or <code>localhost</code>.</li>
+          <li>Use Chrome on Android or Safari on iOS 17+.</li>
+          <li>When prompted, allow camera & AR permissions.</li>
+          <li>If embedded in an iframe, it must include <code>allow=\"camera; xr-spatial-tracking\"</code>.</li>
+        </ul>
+      </div>
     </div>
   </div>
   <div id="reticleTip">Surface found ✅ — tap to place the cube</div>
   <div id="tapHint">Tip: slowly move your phone to help detect the surface</div>
+  <div id="errorBox"></div>
 
   <script type="module">
     import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
@@ -38,8 +48,16 @@
 
     const overlay = document.getElementById('overlay');
     const enterBtn = document.getElementById('enterAR');
+    const grantCamBtn = document.getElementById('grantCam');
     const reticleTip = document.getElementById('reticleTip');
     const tapHint = document.getElementById('tapHint');
+    const errorBox = document.getElementById('errorBox');
+
+    function showError(msg) {
+      console.error(msg);
+      errorBox.textContent = typeof msg === 'string' ? msg : (msg?.message || String(msg));
+      errorBox.style.display = 'block';
+    }
 
     // Basic setup
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -69,17 +87,32 @@
 
     // Enter AR on button click (custom to control UI)
     enterBtn.addEventListener('click', async () => {
-      if (!navigator.xr) {
-        alert('WebXR not available on this device/browser. Use Chrome/Android or Safari/iOS 17+ with AR enabled.');
-        return;
+      try {
+        if (!('xr' in navigator)) {
+          showError('WebXR not available. Use a supported browser (Chrome Android or Safari iOS 17+).');
+          return;
+        }
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+          showError('This page must be served over HTTPS (or localhost) to access the camera.');
+          return;
+        }
+        const supported = await navigator.xr.isSessionSupported('immersive-ar');
+        if (!supported) {
+          showError('AR session not supported on this device/browser. Update your OS/browser or try another device.');
+          return;
+        }
+        const arBtn = ARButton.createButton(renderer, {
+          requiredFeatures: ['hit-test'],
+          optionalFeatures: ['dom-overlay', 'light-estimation'],
+          domOverlay: { root: document.body }
+        });
+        arBtn.click();
+        overlay.style.display = 'none';
+        tapHint.style.display = 'block';
+      } catch (e) {
+        showError(e);
       }
-
-      // Build a custom AR button to pass options
-      const arBtn = ARButton.createButton(renderer, {
-        requiredFeatures: ['hit-test'], // plane-like placement via hit-test
-        optionalFeatures: ['dom-overlay', 'light-estimation'],
-        domOverlay: { root: document.body }
-      });
+    });
 
       // Trigger session start via the ARButton internal handler
       arBtn.click();
@@ -114,6 +147,21 @@
 
       scene.add(cube);
     }
+
+    // Pre-flight camera permission (some browsers show clearer prompts with getUserMedia)
+    grantCamBtn.addEventListener('click', async () => {
+      try {
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+          showError('Enable HTTPS (or use localhost) before granting camera permissions.');
+          return;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        stream.getTracks().forEach(t => t.stop());
+        grantCamBtn.textContent = 'Camera access granted ✅';
+      } catch (e) {
+        showError('Camera permission failed: ' + (e?.message || e));
+      }
+    });
 
     renderer.xr.addEventListener('sessionstart', () => {
       const session = renderer.xr.getSession();
