@@ -150,10 +150,11 @@
       <!-- DISTANCE -->
       <section class="card" aria-labelledby="distanceHdr">
         <h2 id="distanceHdr">Distance Calculator</h2>
-        <p class="sub">Compute great‑circle distance (Haversine) between two points and get the direction to walk.</p>
+        <p class="sub">Point A is set automatically at page start (your first fix). Point B updates with live location. Computes distance + direction to walk.</p>
         <div class="btn-row" style="margin-bottom:8px">
           <button id="useCurrentForA">Use current → Point A</button>
           <button id="useCurrentForB">Use current → Point B</button>
+          <button id="btnResetA">Reset A to current</button>
         </div>
         <div class="row">
           <div>
@@ -313,6 +314,26 @@
       $('#lng').textContent = fmtNum(longitude, 6);
       $('#acc').textContent = fmtNum(accuracy, 1);
       $('#ts').textContent = tsFmt(pos.timestamp);
+
+      // If A not set yet, set it from the first successful fix
+      if (!initialASet) {
+        $('#aLat').value = latitude;
+        $('#aLng').value = longitude;
+        initialASet = true;
+      }
+      // Always treat latest reading as B
+      $('#bLat').value = latitude;
+      $('#bLng').value = longitude;
+
+      // Update outputs automatically
+      updateDistance();
+
+      setStatus(watchId ? 'watching…' : (initialASet ? 'position acquired (A set)' : 'position acquired'), 'ok');
+    } = pos.coords;
+      $('#lat').textContent = fmtNum(latitude, 6);
+      $('#lng').textContent = fmtNum(longitude, 6);
+      $('#acc').textContent = fmtNum(accuracy, 1);
+      $('#ts').textContent = tsFmt(pos.timestamp);
       setStatus(watchId ? 'watching…' : 'position acquired', 'ok');
     }
 
@@ -323,6 +344,9 @@
     }
 
     const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+
+    // Track initial A point
+    let initialASet = false;
 
     $('#btnLocate').addEventListener('click', () => {
       if (!('geolocation' in navigator)) {
@@ -425,12 +449,22 @@
     }
     $('#useCurrentForA').addEventListener('click', () => fillCurrentInto('A'));
     $('#useCurrentForB').addEventListener('click', () => fillCurrentInto('B'));
+    $('#btnResetA').addEventListener('click', () => { const lat=parseFloat($('#lat').textContent); const lng=parseFloat($('#lng').textContent); if(Number.isFinite(lat)&&Number.isFinite(lng)){ $('#aLat').value=lat; $('#aLng').value=lng; setStatus('Point A reset to current', 'ok'); updateDistance(); } else { setStatus('Get your current location first', 'warn'); }} );
+    $('#useCurrentForB').addEventListener('click', () => fillCurrentInto('B'));
 
     // Graceful HTTPS/permissions hint
     (function showHints(){
       const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
       if (!isHttps) setStatus('Site must be HTTPS or localhost for precise location', 'warn');
       else setStatus('ready', 'ok');
+    })();
+
+    // Auto-set A at page start using one-time geolocation
+    (function initAAtStart(){
+      if (!('geolocation' in navigator)) return;
+      const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!isHttps) return;
+      navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, geoOpts);
     })();
   // --- Compass (Device Orientation) ---
     let compassEnabled = false;
