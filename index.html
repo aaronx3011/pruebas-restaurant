@@ -241,6 +241,8 @@
   </div>
 
   <script>
+    // Ensure DOM is ready before wiring events (prevents non-working buttons)
+    window.addEventListener('DOMContentLoaded', () => {
     // --- Utilities ---
     const $ = (sel, root=document) => root.querySelector(sel);
     const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
@@ -562,6 +564,17 @@
       lastBearing = initialBearing(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
       updateCompassUI();
     }
+    // --- Safety: catch any uncaught errors and show in status ---
+    window.addEventListener('error', (e)=>{
+      try { setStatus('JS error: ' + (e?.error?.message || e?.message || 'unknown'), 'err'); } catch (_) {}
+      console.error('Uncaught error', e?.error || e);
+    });
+    window.addEventListener('unhandledrejection', (e)=>{
+      try { setStatus('Promise error: ' + (e?.reason?.message || e?.reason || 'unknown'), 'err'); } catch (_) {}
+      console.error('Unhandled rejection', e?.reason);
+    });
+
+    }); // end DOMContentLoaded
   </script>
 </body>
 </html>
