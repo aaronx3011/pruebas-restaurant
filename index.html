@@ -188,6 +188,7 @@
           <div style="display:flex; align-items:end; gap:10px;">
             <button id="btnCalc">Calculate distance</button>
             <button id="btnAuto">Toggle auto‑update</button>
+            <button id="btnCompass">Enable compass</button>
           </div>
         </div>
         <div class="hr"></div>
@@ -199,6 +200,30 @@
           <div>
             <div class="small">Bearing (initial)</div>
             <strong id="outBear">–</strong>
+            <div id="compassWrap" style="display:grid; grid-template-columns: 72px 1fr; gap:8px; align-items:center; margin-top:8px;">
+              <svg id="compass" viewBox="0 0 100 100" width="72" height="72" aria-label="Compass" role="img" style="border-radius:12px; background:#0b1220; border:1px solid var(--border);">
+                <circle cx="50" cy="50" r="46" fill="none" stroke="#1f2937" stroke-width="2" />
+                <!-- tick marks -->
+                <g stroke="#334155" stroke-width="2">
+                  <line x1="50" y1="4" x2="50" y2="10" />
+                  <line x1="50" y1="90" x2="50" y2="96" />
+                  <line x1="4" y1="50" x2="10" y2="50" />
+                  <line x1="90" y1="50" x2="96" y2="50" />
+                </g>
+                <!-- N label -->
+                <text x="50" y="18" text-anchor="middle" font-size="10" fill="#e5e7eb" font-family="system-ui">N</text>
+                <!-- arrow (rotates relative to device heading) -->
+                <g id="compassArrow" transform="rotate(0 50 50)">
+                  <polygon points="50,18 44,50 50,46 56,50" fill="#38bdf8" />
+                  <polygon points="50,82 44,50 50,54 56,50" fill="#0ea5e9" opacity="0.5" />
+                </g>
+              </svg>
+              <div class="small" style="display:grid; gap:4px;">
+                <div>Device heading: <span id="outHeading" class="mono">–</span></div>
+                <div>Turn to target: <span id="outTurn" class="mono">–</span></div>
+                <div class="small" style="opacity:.8">Arrow shows where to turn from your current facing.</div>
+              </div>
+            </div>
           </div>
           <div>
             <div class="small">Direction to walk (A → B)</div>
@@ -407,6 +432,78 @@
       if (!isHttps) setStatus('Site must be HTTPS or localhost for precise location', 'warn');
       else setStatus('ready', 'ok');
     })();
+  // --- Compass (Device Orientation) ---
+    let compassEnabled = false;
+    let lastBearing = null; // from A -> B
+    let lastHeading = null; // device heading (0 = North)
+
+    function getHeadingFromEvent(e){
+      // iOS Safari provides webkitCompassHeading (0..360, 0 = North, clockwise)
+      if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
+        return e.webkitCompassHeading;
+      }
+      // Generic: if absolute orientation, alpha is degrees clockwise from device reference frame.
+      // Approximate compass heading as 360 - alpha (so that 0 = North, clockwise)
+      if (e.absolute === true && typeof e.alpha === 'number') {
+        return (360 - e.alpha + 360) % 360;
+      }
+      return null;
+    }
+
+    function updateCompassUI(){
+      const headingEl = $('#outHeading');
+      const turnEl = $('#outTurn');
+      const arrow = $('#compassArrow');
+      if (lastHeading == null) { headingEl.textContent = '–'; }
+      else headingEl.textContent = `${fmtNum(lastHeading,1)}°`;
+
+      if (lastHeading != null && lastBearing != null) {
+        const turn = (lastBearing - lastHeading + 360) % 360; // how much to rotate from facing to target
+        turnEl.textContent = `${fmtNum(turn,1)}°`;
+        if (arrow) arrow.setAttribute('transform', `rotate(${turn} 50 50)`);
+      } else {
+        turnEl.textContent = '–';
+        if (arrow) arrow.setAttribute('transform', 'rotate(0 50 50)');
+      }
+    }
+
+    function handleOrientation(e){
+      const h = getHeadingFromEvent(e);
+      if (h == null) return; // ignore until we get a valid value
+      lastHeading = (h + 360) % 360;
+      updateCompassUI();
+    }
+
+    async function enableCompass(){
+      if (compassEnabled) return;
+      try {
+        // iOS permission flow
+        if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const resp = await DeviceOrientationEvent.requestPermission();
+          if (resp !== 'granted') { alert('Compass permission was not granted.'); return; }
+        }
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        compassEnabled = true;
+        const btn = $('#btnCompass');
+        if (btn) { btn.textContent = 'Compass enabled ✅'; btn.disabled = true; }
+        updateCompassUI();
+      } catch (e) {
+        alert('Compass not available: ' + (e?.message || e));
+      }
+    }
+
+    // Hook button
+    $('#btnCompass').addEventListener('click', enableCompass);
+
+    // keep lastBearing updated whenever we compute distance
+    const _origUpdateDistance = updateDistance;
+    updateDistance = function(){
+      _origUpdateDistance();
+      const vals = readInputs();
+      if (!vals) { lastBearing = null; updateCompassUI(); return; }
+      lastBearing = initialBearing(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
+      updateCompassUI();
+    }
   </script>
 </body>
 </html>
