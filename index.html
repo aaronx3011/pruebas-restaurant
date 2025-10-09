@@ -113,6 +113,7 @@
         <h2 id="currentLocHdr">Current Location</h2>
         <p class="sub">Use your device's GPS to get precise coordinates.</p>
         <div class="btn-row">
+          <button id="btnStartAll">Start now (set A & track B)</button>
           <button id="btnLocate">Get current location</button>
           <button id="btnWatch">Start live updates</button>
           <button id="btnStop" disabled>Stop updates</button>
@@ -343,7 +344,7 @@
       setStatus(`${map[err.code] || 'Unknown error'} — ${err.message}`, 'err');
     }
 
-    const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+    const geoOpts = { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 };
 
     // Track initial A point
     let initialASet = false;
@@ -357,9 +358,24 @@
       navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, geoOpts);
     });
 
+    function startTracking(){
+      if (!('geolocation' in navigator)) { setStatus('Geolocation not supported in this browser', 'err'); return; }
+      setStatus('requesting location…');
+      navigator.geolocation.getCurrentPosition((pos)=>{
+        onPosSuccess(pos);
+        if (watchId === null) {
+          setStatus('starting watch…');
+          watchId = navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
+          $('#btnStop').disabled = false;
+        }
+      }, onPosError, geoOpts);
+    }
+
+    $('#btnStartAll').addEventListener('click', startTracking);
+
     $('#btnWatch').addEventListener('click', () => {
-      if (!('geolocation' in navigator)) {
-        setStatus('Geolocation not supported in this browser', 'err');
+      startTracking();
+    });
         return;
       }
       if (watchId !== null) return; // already watching
@@ -456,7 +472,15 @@
     (function showHints(){
       const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
       if (!isHttps) setStatus('Site must be HTTPS or localhost for precise location', 'warn');
-      else setStatus('ready', 'ok');
+    })();
+
+    // Auto-set A at page start using one-time geolocation (best effort; some browsers require user gesture)
+    (function initAAtStart(){
+      if (!('geolocation' in navigator)) return;
+      const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!isHttps) return;
+      setStatus('requesting location…');
+      navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, geoOpts);
     })();
 
     // Auto-set A at page start using one-time geolocation
