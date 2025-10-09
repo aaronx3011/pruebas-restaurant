@@ -113,7 +113,6 @@
         <h2 id="currentLocHdr">Current Location</h2>
         <p class="sub">Use your device's GPS to get precise coordinates.</p>
         <div class="btn-row">
-          <button id="btnStartAll">Start now (set A & track B)</button>
           <button id="btnLocate">Get current location</button>
           <button id="btnWatch">Start live updates</button>
           <button id="btnStop" disabled>Stop updates</button>
@@ -151,11 +150,10 @@
       <!-- DISTANCE -->
       <section class="card" aria-labelledby="distanceHdr">
         <h2 id="distanceHdr">Distance Calculator</h2>
-        <p class="sub">Point A is set automatically at page start (your first fix). Point B updates with live location. Computes distance + direction to walk.</p>
+        <p class="sub">Compute great‑circle distance (Haversine) between two points and get the direction to walk.</p>
         <div class="btn-row" style="margin-bottom:8px">
           <button id="useCurrentForA">Use current → Point A</button>
           <button id="useCurrentForB">Use current → Point B</button>
-          <button id="btnResetA">Reset A to current</button>
         </div>
         <div class="row">
           <div>
@@ -190,7 +188,6 @@
           <div style="display:flex; align-items:end; gap:10px;">
             <button id="btnCalc">Calculate distance</button>
             <button id="btnAuto">Toggle auto‑update</button>
-            <button id="btnCompass">Enable compass</button>
           </div>
         </div>
         <div class="hr"></div>
@@ -202,30 +199,6 @@
           <div>
             <div class="small">Bearing (initial)</div>
             <strong id="outBear">–</strong>
-            <div id="compassWrap" style="display:grid; grid-template-columns: 72px 1fr; gap:8px; align-items:center; margin-top:8px;">
-              <svg id="compass" viewBox="0 0 100 100" width="72" height="72" aria-label="Compass" role="img" style="border-radius:12px; background:#0b1220; border:1px solid var(--border);">
-                <circle cx="50" cy="50" r="46" fill="none" stroke="#1f2937" stroke-width="2" />
-                <!-- tick marks -->
-                <g stroke="#334155" stroke-width="2">
-                  <line x1="50" y1="4" x2="50" y2="10" />
-                  <line x1="50" y1="90" x2="50" y2="96" />
-                  <line x1="4" y1="50" x2="10" y2="50" />
-                  <line x1="90" y1="50" x2="96" y2="50" />
-                </g>
-                <!-- N label -->
-                <text x="50" y="18" text-anchor="middle" font-size="10" fill="#e5e7eb" font-family="system-ui">N</text>
-                <!-- arrow (rotates relative to device heading) -->
-                <g id="compassArrow" transform="rotate(0 50 50)">
-                  <polygon points="50,18 44,50 50,46 56,50" fill="#38bdf8" />
-                  <polygon points="50,82 44,50 50,54 56,50" fill="#0ea5e9" opacity="0.5" />
-                </g>
-              </svg>
-              <div class="small" style="display:grid; gap:4px;">
-                <div>Device heading: <span id="outHeading" class="mono">–</span></div>
-                <div>Turn to target: <span id="outTurn" class="mono">–</span></div>
-                <div class="small" style="opacity:.8">Arrow shows where to turn from your current facing.</div>
-              </div>
-            </div>
           </div>
           <div>
             <div class="small">Direction to walk (A → B)</div>
@@ -241,8 +214,6 @@
   </div>
 
   <script>
-    // Ensure DOM is ready before wiring events (prevents non-working buttons)
-    window.addEventListener('DOMContentLoaded', () => {
     // --- Utilities ---
     const $ = (sel, root=document) => root.querySelector(sel);
     const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
@@ -317,26 +288,6 @@
       $('#lng').textContent = fmtNum(longitude, 6);
       $('#acc').textContent = fmtNum(accuracy, 1);
       $('#ts').textContent = tsFmt(pos.timestamp);
-
-      // If A not set yet, set it from the first successful fix
-      if (!initialASet) {
-        $('#aLat').value = latitude;
-        $('#aLng').value = longitude;
-        initialASet = true;
-      }
-      // Always treat latest reading as B
-      $('#bLat').value = latitude;
-      $('#bLng').value = longitude;
-
-      // Update outputs automatically
-      updateDistance();
-
-      setStatus(watchId ? 'watching…' : (initialASet ? 'position acquired (A set)' : 'position acquired'), 'ok');
-    } = pos.coords;
-      $('#lat').textContent = fmtNum(latitude, 6);
-      $('#lng').textContent = fmtNum(longitude, 6);
-      $('#acc').textContent = fmtNum(accuracy, 1);
-      $('#ts').textContent = tsFmt(pos.timestamp);
       setStatus(watchId ? 'watching…' : 'position acquired', 'ok');
     }
 
@@ -346,10 +297,7 @@
       setStatus(`${map[err.code] || 'Unknown error'} — ${err.message}`, 'err');
     }
 
-    const geoOpts = { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 };
-
-    // Track initial A point
-    let initialASet = false;
+    const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
 
     $('#btnLocate').addEventListener('click', () => {
       if (!('geolocation' in navigator)) {
@@ -360,24 +308,9 @@
       navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, geoOpts);
     });
 
-    function startTracking(){
-      if (!('geolocation' in navigator)) { setStatus('Geolocation not supported in this browser', 'err'); return; }
-      setStatus('requesting location…');
-      navigator.geolocation.getCurrentPosition((pos)=>{
-        onPosSuccess(pos);
-        if (watchId === null) {
-          setStatus('starting watch…');
-          watchId = navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
-          $('#btnStop').disabled = false;
-        }
-      }, onPosError, geoOpts);
-    }
-
-    $('#btnStartAll').addEventListener('click', startTracking);
-
     $('#btnWatch').addEventListener('click', () => {
-      startTracking();
-    });
+      if (!('geolocation' in navigator)) {
+        setStatus('Geolocation not supported in this browser', 'err');
         return;
       }
       if (watchId !== null) return; // already watching
@@ -467,115 +400,13 @@
     }
     $('#useCurrentForA').addEventListener('click', () => fillCurrentInto('A'));
     $('#useCurrentForB').addEventListener('click', () => fillCurrentInto('B'));
-    $('#btnResetA').addEventListener('click', () => { const lat=parseFloat($('#lat').textContent); const lng=parseFloat($('#lng').textContent); if(Number.isFinite(lat)&&Number.isFinite(lng)){ $('#aLat').value=lat; $('#aLng').value=lng; setStatus('Point A reset to current', 'ok'); updateDistance(); } else { setStatus('Get your current location first', 'warn'); }} );
-    $('#useCurrentForB').addEventListener('click', () => fillCurrentInto('B'));
 
     // Graceful HTTPS/permissions hint
     (function showHints(){
       const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
       if (!isHttps) setStatus('Site must be HTTPS or localhost for precise location', 'warn');
+      else setStatus('ready', 'ok');
     })();
-
-    // Auto-set A at page start using one-time geolocation (best effort; some browsers require user gesture)
-    (function initAAtStart(){
-      if (!('geolocation' in navigator)) return;
-      const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-      if (!isHttps) return;
-      setStatus('requesting location…');
-      navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, geoOpts);
-    })();
-
-    // Auto-set A at page start using one-time geolocation
-    (function initAAtStart(){
-      if (!('geolocation' in navigator)) return;
-      const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-      if (!isHttps) return;
-      navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, geoOpts);
-    })();
-  // --- Compass (Device Orientation) ---
-    let compassEnabled = false;
-    let lastBearing = null; // from A -> B
-    let lastHeading = null; // device heading (0 = North)
-
-    function getHeadingFromEvent(e){
-      // iOS Safari provides webkitCompassHeading (0..360, 0 = North, clockwise)
-      if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
-        return e.webkitCompassHeading;
-      }
-      // Generic: if absolute orientation, alpha is degrees clockwise from device reference frame.
-      // Approximate compass heading as 360 - alpha (so that 0 = North, clockwise)
-      if (e.absolute === true && typeof e.alpha === 'number') {
-        return (360 - e.alpha + 360) % 360;
-      }
-      return null;
-    }
-
-    function updateCompassUI(){
-      const headingEl = $('#outHeading');
-      const turnEl = $('#outTurn');
-      const arrow = $('#compassArrow');
-      if (lastHeading == null) { headingEl.textContent = '–'; }
-      else headingEl.textContent = `${fmtNum(lastHeading,1)}°`;
-
-      if (lastHeading != null && lastBearing != null) {
-        const turn = (lastBearing - lastHeading + 360) % 360; // how much to rotate from facing to target
-        turnEl.textContent = `${fmtNum(turn,1)}°`;
-        if (arrow) arrow.setAttribute('transform', `rotate(${turn} 50 50)`);
-      } else {
-        turnEl.textContent = '–';
-        if (arrow) arrow.setAttribute('transform', 'rotate(0 50 50)');
-      }
-    }
-
-    function handleOrientation(e){
-      const h = getHeadingFromEvent(e);
-      if (h == null) return; // ignore until we get a valid value
-      lastHeading = (h + 360) % 360;
-      updateCompassUI();
-    }
-
-    async function enableCompass(){
-      if (compassEnabled) return;
-      try {
-        // iOS permission flow
-        if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-          const resp = await DeviceOrientationEvent.requestPermission();
-          if (resp !== 'granted') { alert('Compass permission was not granted.'); return; }
-        }
-        window.addEventListener('deviceorientation', handleOrientation, true);
-        compassEnabled = true;
-        const btn = $('#btnCompass');
-        if (btn) { btn.textContent = 'Compass enabled ✅'; btn.disabled = true; }
-        updateCompassUI();
-      } catch (e) {
-        alert('Compass not available: ' + (e?.message || e));
-      }
-    }
-
-    // Hook button
-    $('#btnCompass').addEventListener('click', enableCompass);
-
-    // keep lastBearing updated whenever we compute distance
-    const _origUpdateDistance = updateDistance;
-    updateDistance = function(){
-      _origUpdateDistance();
-      const vals = readInputs();
-      if (!vals) { lastBearing = null; updateCompassUI(); return; }
-      lastBearing = initialBearing(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
-      updateCompassUI();
-    }
-    // --- Safety: catch any uncaught errors and show in status ---
-    window.addEventListener('error', (e)=>{
-      try { setStatus('JS error: ' + (e?.error?.message || e?.message || 'unknown'), 'err'); } catch (_) {}
-      console.error('Uncaught error', e?.error || e);
-    });
-    window.addEventListener('unhandledrejection', (e)=>{
-      try { setStatus('Promise error: ' + (e?.reason?.message || e?.reason || 'unknown'), 'err'); } catch (_) {}
-      console.error('Unhandled rejection', e?.reason);
-    });
-
-    }); // end DOMContentLoaded
   </script>
 </body>
 </html>
-
