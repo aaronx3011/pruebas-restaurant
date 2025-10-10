@@ -6,37 +6,32 @@
   <title>GPS & Distance Helper</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --panel: #111827;
-      --muted: #94a3b8;
-      --text: #e5e7eb;
-      --accent: #10b981;
-      --accent-2: #38bdf8;
-      --danger: #ef4444;
-      --warn: #f59e0b;
-      --card: #0b1220;
-      --border: #1f2937;
+      --bg: #0f172a;        /* slate-900 */
+      --panel: #111827;     /* gray-900 */
+      --muted: #94a3b8;     /* slate-400 */
+      --text: #e5e7eb;      /* gray-200 */
+      --accent: #10b981;    /* emerald-500 */
+      --accent-2: #38bdf8;  /* sky-400 */
+      --danger: #ef4444;    /* red-500 */
+      --warn: #f59e0b;      /* amber-500 */
+      --card: #0b1220;      /* custom */
+      --border: #1f2937;    /* gray-800 */
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; }
+    html, body { height: 100%; }
     body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial;
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
       background: radial-gradient(1200px 600px at 70% -10%, #0b1d34 0%, var(--bg) 45%);
       color: var(--text);
-      display: grid;
-      place-items: start center;
-      padding: 24px;
+      display: grid; place-items: start center; padding: 24px;
     }
     .container { width: min(980px, 100%); display: grid; gap: 16px; }
     header {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      padding: 12px 16px;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      background: linear-gradient(180deg, #0c1425 0%, #0a0f1a 100%);
+      padding: 12px 16px; border: 1px solid var(--border); border-radius: 16px; background: linear-gradient(180deg, #0c1425 0%, #0a0f1a 100%);
       box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
     }
-    header h1 { font-size: clamp(18px, 3.6vw, 24px); margin: 0; }
+    header h1 { font-size: clamp(18px, 3.6vw, 24px); margin: 0; letter-spacing: .2px; }
     header .hint { color: var(--muted); font-size: 13px; }
 
     .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
@@ -52,12 +47,13 @@
 
     .card h2 { margin: 0 0 8px; font-size: 18px; }
     .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
-    .row, .row-3 { display: grid; gap: 10px; }
-    .row { grid-template-columns: 1fr 1fr; }
-    .row-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
     label { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: block; }
 
-    input, select, button {
+    input, select, button, textarea {
       width: 100%;
       border: 1px solid var(--border);
       background: #0b1220;
@@ -67,26 +63,22 @@
       font-size: 14px;
       outline: none;
     }
+    input::placeholder { color: #6b7280; }
 
     button {
-      cursor: pointer;
-      background: linear-gradient(180deg, #1b2a3f 0%, #132235 100%);
-      transition: transform .05s ease, filter .2s ease;
+      cursor: pointer; border: 1px solid #1f2937; background: linear-gradient(180deg, #1b2a3f 0%, #132235 100%);
+      transition: transform .05s ease, filter .2s ease, background .2s ease;
     }
-    button:hover { filter: brightness(1.1); }
+    button:hover { filter: brightness(1.05); }
     button:active { transform: translateY(1px); }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
 
-    .pill {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 8px 12px; border-radius: 999px;
-      background: #0b1220; border: 1px solid var(--border);
-      font-size: 13px; color: var(--muted);
-    }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: #0b1220; border: 1px solid var(--border); font-size: 13px; color: var(--muted); }
     .ok { color: var(--accent); }
     .warn { color: var(--warn); }
     .err { color: var(--danger); }
 
-    .mono { font-family: monospace; font-size: 13px; color: #cbd5e1; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; color: #cbd5e1; }
     .value { display: block; padding: 8px 10px; border-radius: 10px; background: #0b1220; border: 1px solid var(--border); }
 
     .result {
@@ -98,136 +90,413 @@
     footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 6px; }
     .small { font-size: 12px; color: var(--muted); }
     .hr { height: 1px; background: var(--border); margin: 12px 0; border-radius: 999px; }
+
+    /* Proximity banner */
+    .prox-banner {
+      display: none;
+      margin-top: 10px;
+      border: 1px solid var(--accent);
+      background: rgba(16,185,129,0.1);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .prox-banner a {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #0f223a;
+      border: 1px solid #243449;
+      text-decoration: none;
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <h1>GPS & Distance Helper</h1>
-      <div class="hint">Works best on HTTPS (or localhost) with location permission enabled.</div>
+      <div class="hint">Works best on HTTPS (or localhost) and with Location permission enabled.</div>
     </header>
 
     <div class="grid">
       <!-- CURRENT LOCATION -->
-      <section class="card">
-        <h2>Current Location</h2>
-        <p class="sub">Get your current coordinates.</p>
-        <div class="row-3">
-          <button id="btnLocate">Get location</button>
-          <button id="btnWatch">Start live</button>
-          <button id="btnStop" disabled>Stop</button>
+      <section class="card" aria-labelledby="currentLocHdr">
+        <h2 id="currentLocHdr">Current Location</h2>
+        <p class="sub">Use your device's GPS to get precise coordinates.</p>
+        <div class="btn-row">
+          <button id="btnLocate">Get current location</button>
+          <button id="btnWatch">Start live updates</button>
+          <button id="btnStop" disabled>Stop updates</button>
         </div>
         <div class="hr"></div>
         <div class="row">
-          <div><label>Latitude</label><code id="lat" class="value mono">–</code></div>
-          <div><label>Longitude</label><code id="lng" class="value mono">–</code></div>
+          <div>
+            <label>Latitude</label>
+            <code id="lat" class="value mono">–</code>
+          </div>
+          <div>
+            <label>Longitude</label>
+            <code id="lng" class="value mono">–</code>
+          </div>
         </div>
         <div class="row">
-          <div><label>Accuracy (m)</label><code id="acc" class="value mono">–</code></div>
-          <div><label>Timestamp</label><code id="ts" class="value mono">–</code></div>
+          <div>
+            <label>Accuracy (meters)</label>
+            <code id="acc" class="value mono">–</code>
+          </div>
+          <div>
+            <label>Timestamp</label>
+            <code id="ts" class="value mono">–</code>
+          </div>
         </div>
-        <p id="geoStatus" class="pill warn">Geolocation status: idle</p>
+        <p id="geoStatus" class="pill warn" role="status">Geolocation status: idle</p>
       </section>
 
-      <!-- DISTANCE CALC -->
-      <section class="card">
-        <h2>Distance Calculator</h2>
-        <p class="sub">Calculates distance and direction (A → B).</p>
-        <div class="row-3">
-          <button id="useCurrentForA">Use current → A</button>
-          <button id="useCurrentForB">Use current → B</button>
+      <!-- DISTANCE -->
+      <section class="card" aria-labelledby="distanceHdr">
+        <h2 id="distanceHdr">Distance Calculator</h2>
+        <p class="sub">Compute great-circle distance (Haversine) between two points and get the direction to walk.</p>
+
+        <div class="btn-row" style="margin-bottom:8px">
+          <button id="useCurrentForA">Use current → Point A</button>
+          <button id="useCurrentForB">Use current → Point B</button>
           <button id="btnAuto">Toggle auto-update</button>
         </div>
+
         <div class="row">
-          <div><label>Point A — Latitude</label><input id="aLat" type="number" step="any" /></div>
-          <div><label>Point A — Longitude</label><input id="aLng" type="number" step="any" /></div>
+          <div>
+            <label>Point A — Latitude</label>
+            <input id="aLat" type="number" step="any" placeholder="e.g., 10.5001" />
+          </div>
+          <div>
+            <label>Point A — Longitude</label>
+            <input id="aLng" type="number" step="any" placeholder="e.g., -66.9170" />
+          </div>
         </div>
         <div class="row">
-          <div><label>Point B — Latitude</label><input id="bLat" type="number" step="any" /></div>
-          <div><label>Point B — Longitude</label><input id="bLng" type="number" step="any" /></div>
+          <div>
+            <label>Point B — Latitude</label>
+            <input id="bLat" type="number" step="any" placeholder="e.g., 10.6417" />
+          </div>
+          <div>
+            <label>Point B — Longitude</label>
+            <input id="bLng" type="number" step="any" placeholder="e.g., -71.6127" />
+          </div>
         </div>
+
         <div class="row">
           <div>
             <label>Units</label>
             <select id="units">
-              <option value="m">Meters</option>
               <option value="km">Kilometers</option>
               <option value="mi">Miles</option>
-              <option value="nm">Nautical Miles</option>
+              <option value="m">Meters</option>
+              <option value="nm">Nautical miles</option>
             </select>
           </div>
-          <div style="display:flex;align-items:end;"><button id="btnCalc">Calculate</button></div>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <button id="btnCalc">Calculate distance</button>
+            <div class="small">Proximity open link when within:</div>
+            <div class="row">
+              <div>
+                <label>Threshold (meters)</label>
+                <input id="proxThreshold" type="number" value="500" min="1" />
+              </div>
+              <div>
+                <label>Open mode</label>
+                <select id="openMode">
+                  <option value="new">New tab</option>
+                  <option value="same">Same tab</option>
+                </select>
+              </div>
+            </div>
+            <label>URL to open when within threshold</label>
+            <input id="proxUrl" type="url" placeholder="https://example.com" />
+          </div>
         </div>
+
         <div class="hr"></div>
-        <div class="result">
-          <div><div class="small">Distance</div><strong id="outDist">–</strong></div>
-          <div><div class="small">Bearing</div><strong id="outBear">–</strong></div>
-          <div><div class="small">Direction</div><strong id="outDir">–</strong></div>
+        <div class="result" aria-live="polite">
+          <div>
+            <div class="small">Distance</div>
+            <strong id="outDist">–</strong>
+          </div>
+          <div>
+            <div class="small">Bearing (initial)</div>
+            <strong id="outBear">–</strong>
+          </div>
+          <div>
+            <div class="small">Direction to walk (A → B)</div>
+            <strong id="outDir">–</strong>
+          </div>
+        </div>
+
+        <div id="proxBanner" class="prox-banner">
+          <div><strong>You are within range.</strong> Pop-ups may be blocked. Click to proceed:</div>
+          <a id="proxBannerLink" href="#" target="_blank" rel="noopener">Open link</a>
         </div>
       </section>
     </div>
 
-    <footer>Built with Geolocation API. Your data stays on-device.</footer>
+    <footer>
+      Built with the Web Geolocation API. No external libraries. Your coordinates stay on-device.
+    </footer>
   </div>
 
   <script>
-    const $ = (s, r=document) => r.querySelector(s);
-    const $$ = (s, r=document) => [...r.querySelectorAll(s)];
-    function toRad(d){return d*Math.PI/180;}
-    function toDeg(r){return r*180/Math.PI;}
-    function fmt(n,d=6){return Number.isFinite(n)?n.toFixed(d).replace(/\.0+$/,''):'–';}
-    function hav(a1,o1,a2,o2){const R=6371e3;const φ1=toRad(a1),φ2=toRad(a2),Δφ=toRad(a2-a1),Δλ=toRad(o2-o1);const x=Math.sin(Δφ/2)**2+Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
-    function bearing(a1,o1,a2,o2){const φ1=toRad(a1),φ2=toRad(a2),λ1=toRad(o1),λ2=toRad(o2);const y=Math.sin(λ2-λ1)*Math.cos(φ2);const x=Math.cos(φ1)*Math.sin(φ2)-Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);return (toDeg(Math.atan2(y,x))+360)%360;}
-    function convert(m,u){switch(u){case'km':return m/1000;case'mi':return m/1609.344;case'nm':return m/1852;default:return m;}}
-    function cardinal(b){return['N','NE','E','SE','S','SW','W','NW'][Math.round(b/45)%8];}
-    function status(t,m='warn'){const e=$('#geoStatus');e.textContent=`Geolocation status: ${t}`;e.className=`pill ${m}`;}
+    // --- Utilities ---
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
-    let watchId=null,auto=false,alertShown=false;
-    const opts={enableHighAccuracy:true,timeout:10000,maximumAge:0};
-
-    if('Notification'in window && Notification.permission==='default') Notification.requestPermission();
-
-    function onPos(p){$('#lat').textContent=fmt(p.coords.latitude,6);$('#lng').textContent=fmt(p.coords.longitude,6);$('#acc').textContent=fmt(p.coords.accuracy,1);$('#ts').textContent=new Date(p.timestamp).toLocaleString();status('active','ok');if(auto)fill('B');}
-    function onErr(e){status('Error: '+e.message,'err');}
-
-    $('#btnLocate').onclick=()=>navigator.geolocation.getCurrentPosition(onPos,onErr,opts);
-    $('#btnWatch').onclick=()=>{if(watchId)return;watchId=navigator.geolocation.watchPosition(onPos,onErr,opts);$('#btnStop').disabled=false;status('watching','ok');};
-    $('#btnStop').onclick=()=>{if(watchId){navigator.geolocation.clearWatch(watchId);watchId=null;status('stopped');}$('#btnStop').disabled=true;};
-
-    function read(){const aLat=parseFloat($('#aLat').value),aLng=parseFloat($('#aLng').value),bLat=parseFloat($('#bLat').value),bLng=parseFloat($('#bLng').value);if([aLat,aLng,bLat,bLng].some(v=>!Number.isFinite(v)))return null;return{aLat,aLng,bLat,bLng};}
-
-    function update(){
-      const v=read();if(!v)return;
-      const d=hav(v.aLat,v.aLng,v.bLat,v.bLng),b=bearing(v.aLat,v.aLng,v.bLat,v.bLng),u=$('#units').value;
-      $('#outDist').textContent=`${fmt(convert(d,u),u==='m'?0:3)} ${u}`;
-      $('#outBear').textContent=`${fmt(b,1)}°`;
-      $('#outDir').textContent=`${cardinal(b)} (${fmt(b,1)}°)`;
-
-      if(d<50){
-        if(!alertShown){
-          alertShown=true;
-          $('#outDist').style.color='var(--accent)';
-          $('#outDist').animate([{transform:'scale(1.1)'},{transform:'scale(1)'}],{duration:600,iterations:3});
-          if('Notification'in window && Notification.permission==='granted') new Notification('🚶 You are within 50 meters of your target!');
-          else alert('🚶 You are within 50 meters of your target!');
-        }
-      }else{alertShown=false;$('#outDist').style.color='inherit';}
+    function fmtNum(n, digits=6) {
+      if (Number.isFinite(n)) return n.toFixed(digits).replace(/\.0+$/,'');
+      return '–';
     }
 
-    $('#btnCalc').onclick=update;
-    $('#units').onchange=update;
-    $('#btnAuto').onclick=()=>{auto=!auto;$('#btnAuto').textContent=auto?'Auto-update: ON':'Toggle auto-update';if(auto)update();};
-    ['#aLat','#aLng','#bLat','#bLng'].forEach(s=>$(s).addEventListener('input',()=>{if(auto)update();}));
+    function tsFmt(ms) {
+      if (!ms) return '–';
+      const d = new Date(ms);
+      return d.toLocaleString();
+    }
 
-    function fill(t){const lat=parseFloat($('#lat').textContent),lng=parseFloat($('#lng').textContent);if(!Number.isFinite(lat)||!Number.isFinite(lng))return status('Get location first','warn');if(t==='A'){$('#aLat').value=lat;$('#aLng').value=lng;}if(t==='B'){$('#bLat').value=lat;$('#bLng').value=lng;}update();}
-    $('#useCurrentForA').onclick=()=>fill('A');
-    $('#useCurrentForB').onclick=()=>fill('B');
+    function setStatus(text, mode='warn') {
+      const el = $('#geoStatus');
+      el.textContent = `Geolocation status: ${text}`;
+      el.classList.remove('ok','warn','err');
+      el.classList.add(mode);
+    }
 
-    (()=>{
-      const https=location.protocol==='https:'||['localhost','127.0.0.1'].includes(location.hostname);
-      status(https?'ready':'Needs HTTPS or localhost',https?'ok':'warn');
+    // Haversine distance (meters) and initial bearing (degrees)
+    function toRad(deg){ return deg * Math.PI / 180; }
+    function toDeg(rad){ return rad * 180 / Math.PI; }
+
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371_000; // meters
+      const φ1 = toRad(lat1), φ2 = toRad(lat2);
+      const Δφ = toRad(lat2 - lat1);
+      const Δλ = toRad(lon2 - lon1);
+      const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const d = R * c;
+      return d; // meters
+    }
+
+    function initialBearing(lat1, lon1, lat2, lon2) {
+      const φ1 = toRad(lat1), φ2 = toRad(lat2);
+      const λ1 = toRad(lon1), λ2 = toRad(lon2);
+      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
+      let θ = Math.atan2(y, x) * 180 / Math.PI;
+      return (θ + 360) % 360; // normalize 0..360
+    }
+
+    function convertDistance(meters, unit) {
+      switch(unit) {
+        case 'km': return meters / 1000;
+        case 'mi': return meters / 1609.344;
+        case 'nm': return meters / 1852;
+        case 'm': default: return meters;
+      }
+    }
+
+    function bearingToCardinal(bearing) {
+      const dirs = ['North','North-East','East','South-East','South','South-West','West','North-West'];
+      return dirs[Math.round(bearing / 45) % 8];
+    }
+
+    // --- Geolocation logic ---
+    let watchId = null;
+
+    function onPosSuccess(pos) {
+      const { latitude, longitude, accuracy } = pos.coords;
+      $('#lat').textContent = fmtNum(latitude, 6);
+      $('#lng').textContent = fmtNum(longitude, 6);
+      $('#acc').textContent = fmtNum(accuracy, 1);
+      $('#ts').textContent = tsFmt(pos.timestamp);
+      setStatus(watchId ? 'watching…' : 'position acquired', 'ok');
+      if (auto && autoFillTarget === 'B') fillCurrentInto('B'); // optional live fill
+    }
+
+    function onPosError(err) {
+      console.error(err);
+      const map = { 1: 'Permission denied', 2: 'Position unavailable', 3: 'Timeout' };
+      setStatus(`${map[err.code] || 'Unknown error'} — ${err.message}`, 'err');
+    }
+
+    const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+
+    $('#btnLocate').addEventListener('click', () => {
+      if (!('geolocation' in navigator)) {
+        setStatus('Geolocation not supported in this browser', 'err');
+        return;
+      }
+      setStatus('requesting location…');
+      navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, geoOpts);
+    });
+
+    $('#btnWatch').addEventListener('click', () => {
+      if (!('geolocation' in navigator)) {
+        setStatus('Geolocation not supported in this browser', 'err');
+        return;
+      }
+      if (watchId !== null) return; // already watching
+      setStatus('starting watch…');
+      watchId = navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
+      $('#btnStop').disabled = false;
+    });
+
+    $('#btnStop').addEventListener('click', () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+        setStatus('watch stopped');
+      }
+      $('#btnStop').disabled = true;
+    });
+
+    // Request notification permission early (optional)
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    // Distance calc
+    function readInputs() {
+      const aLat = parseFloat($('#aLat').value);
+      const aLng = parseFloat($('#aLng').value);
+      const bLat = parseFloat($('#bLat').value);
+      const bLng = parseFloat($('#bLng').value);
+      if ([aLat,aLng,bLat,bLng].some(v => !Number.isFinite(v))) return null;
+      return { aLat, aLng, bLat, bLng };
+    }
+
+    function updateOutputs(dMeters, bearingDeg) {
+      const unit = $('#units').value;
+      const converted = convertDistance(dMeters, unit);
+      $('#outDist').textContent = `${fmtNum(converted, unit==='m'?0:3)} ${unit}`;
+      $('#outBear').textContent = `${fmtNum(bearingDeg, 1)}°`;
+      $('#outDir').textContent = `${bearingToCardinal(bearingDeg)} (${fmtNum(bearingDeg,1)}°)`;
+    }
+
+    // Proximity open-link logic
+    const banner = $('#proxBanner');
+    const bannerLink = $('#proxBannerLink');
+    function showProxBanner(url) {
+      banner.style.display = 'block';
+      bannerLink.href = url;
+      bannerLink.target = $('#openMode').value === 'new' ? '_blank' : '_self';
+    }
+    function hideProxBanner() {
+      banner.style.display = 'none';
+    }
+
+    let auto = false;
+    let autoFillTarget = 'B';
+    let alertShown = false;
+    let linkOpened = false;
+
+    function updateDistance(isUserGesture=false) {
+      const vals = readInputs();
+      if (!vals) {
+        $('#outDist').textContent = '–';
+        $('#outBear').textContent = '–';
+        $('#outDir').textContent = '–';
+        hideProxBanner();
+        return;
+      }
+
+      const dMeters = haversine(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
+      const brg = initialBearing(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
+      updateOutputs(dMeters, brg);
+
+      const threshold = Math.max(1, parseFloat($('#proxThreshold').value) || 500);
+      const url = ($('#proxUrl').value || '').trim();
+      const openMode = $('#openMode').value; // 'new' | 'same'
+
+      // Visual + notification when inside a tight radius (keep your earlier behavior at 50m)
+      if (dMeters < 50) {
+        if (!alertShown) {
+          alertShown = true;
+          $('#outDist').style.color = 'var(--accent)';
+          $('#outDist').animate([{transform:'scale(1.1)'},{transform:'scale(1)'}], {duration:600, iterations:3});
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('You are within 50 meters of your target!');
+          } else {
+            // Fallback only if no notification permission
+            console.log('Within 50m (no notification permission).');
+          }
+        }
+      } else {
+        alertShown = false;
+        $('#outDist').style.color = 'inherit';
+      }
+
+      // Open link when within threshold
+      if (url && dMeters < threshold) {
+        if (!linkOpened) {
+          linkOpened = true;
+          hideProxBanner();
+          if (isUserGesture) {
+            try {
+              if (openMode === 'new') {
+                window.open(url, '_blank', 'noopener');
+              } else {
+                window.location.href = url;
+              }
+            } catch (e) {
+              // Popup blocked or error: show banner
+              showProxBanner(url);
+            }
+          } else {
+            // Likely in auto-update; popups may be blocked—show banner
+            showProxBanner(url);
+          }
+        }
+      } else if (dMeters > threshold + 20) {
+        // Hysteresis: reset once clearly out of range to avoid flapping
+        linkOpened = false;
+        hideProxBanner();
+      }
+    }
+
+    $('#btnCalc').addEventListener('click', () => updateDistance(true));
+    $('#units').addEventListener('change', () => updateDistance(false));
+    $('#proxThreshold').addEventListener('input', () => { if (auto) updateDistance(false); });
+    $('#proxUrl').addEventListener('input', () => { if (auto) updateDistance(false); });
+    $('#openMode').addEventListener('change', () => { if (auto) updateDistance(false); });
+
+    // Optional: auto-update on input changes (toggle button)
+    $('#btnAuto').addEventListener('click', () => {
+      auto = !auto;
+      $('#btnAuto').textContent = auto ? 'Auto-update: ON' : 'Toggle auto-update';
+      if (auto) updateDistance(false);
+    });
+    ;['#aLat','#aLng','#bLat','#bLng'].forEach(sel => {
+      $(sel).addEventListener('input', () => { if (auto) updateDistance(false); });
+    });
+
+    // Quick-fill current location to A/B
+    function fillCurrentInto(target) {
+      const lat = parseFloat($('#lat').textContent);
+      const lng = parseFloat($('#lng').textContent);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        setStatus('Get your current location first', 'warn');
+        return;
+      }
+      if (target === 'A') { $('#aLat').value = lat; $('#aLng').value = lng; }
+      if (target === 'B') { $('#bLat').value = lat; $('#bLng').value = lng; }
+      updateDistance(false);
+    }
+    $('#useCurrentForA').addEventListener('click', () => fillCurrentInto('A'));
+    $('#useCurrentForB').addEventListener('click', () => fillCurrentInto('B'));
+
+    // Graceful HTTPS/permissions hint
+    (function showHints(){
+      const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!isHttps) setStatus('Site must be HTTPS or localhost for precise location', 'warn');
+      else setStatus('ready', 'ok');
     })();
   </script>
 </body>
 </html>
-
