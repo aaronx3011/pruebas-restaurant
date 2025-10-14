@@ -6,24 +6,16 @@
   <title>GPS & Distance Helper + AR glTF (Single Page)</title>
   <style>
     :root {
-      --bg: #0f172a;        /* slate-900 */
-      --panel: #111827;     /* gray-900 */
-      --muted: #94a3b8;     /* slate-400 */
-      --text: #e5e7eb;      /* gray-200 */
-      --accent: #10b981;    /* emerald-500 */
-      --accent-2: #38bdf8;  /* sky-400 */
-      --danger: #ef4444;    /* red-500 */
-      --warn: #f59e0b;      /* amber-500 */
-      --card: #0b1220;      /* custom */
-      --border: #1f2937;    /* gray-800 */
+      --bg: #0f172a; --panel: #111827; --muted: #94a3b8; --text: #e5e7eb;
+      --accent: #10b981; --accent-2: #38bdf8; --danger: #ef4444; --warn: #f59e0b;
+      --card: #0b1220; --border: #1f2937;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body {
       margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
       background: radial-gradient(1200px 600px at 70% -10%, #0b1d34 0%, var(--bg) 45%);
-      color: var(--text);
-      display: grid; place-items: start center; padding: 24px;
+      color: var(--text); display: grid; place-items: start center; padding: 24px;
     }
     .container { width: min(980px, 100%); display: grid; gap: 16px; }
     header {
@@ -38,33 +30,21 @@
     @media (min-width: 860px) { .grid { grid-template-columns: 1fr 1fr; } }
 
     .card {
-      border: 1px solid var(--border);
-      background: linear-gradient(180deg, #0a0f1b 0%, #0a0e18 100%);
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 8px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+      border: 1px solid var(--border); background: linear-gradient(180deg, #0a0f1b 0%, #0a0e18 100%);
+      border-radius: 16px; padding: 16px; box-shadow: 0 8px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
     }
-
     .card h2 { margin: 0 0 8px; font-size: 18px; }
     .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
 
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-
     label { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: block; }
 
     input, select, button, textarea {
-      width: 100%;
-      border: 1px solid var(--border);
-      background: #0b1220;
-      color: var(--text);
-      padding: 10px 12px;
-      border-radius: 12px;
-      font-size: 14px;
-      outline: none;
+      width: 100%; border: 1px solid var(--border); background: #0b1220; color: var(--text);
+      padding: 10px 12px; border-radius: 12px; font-size: 14px; outline: none;
     }
     input::placeholder { color: #6b7280; }
-
     button {
       cursor: pointer; border: 1px solid #1f2937; background: linear-gradient(180deg, #1b2a3f 0%, #132235 100%);
       transition: transform .05s ease, filter .2s ease, background .2s ease;
@@ -91,35 +71,16 @@
     .small { font-size: 12px; color: var(--muted); }
     .hr { height: 1px; background: var(--border); margin: 12px 0; border-radius: 999px; }
 
-    /* Proximity banner */
-    .prox-banner {
-      display: none;
-      margin-top: 10px;
-      border: 1px solid var(--accent);
-      background: rgba(16,185,129,0.1);
-      color: var(--text);
-      border-radius: 12px;
-      padding: 10px;
-    }
-    .prox-banner a {
-      display: inline-block;
-      margin-top: 6px;
-      padding: 8px 10px;
-      border-radius: 10px;
-      background: #0f223a;
-      border: 1px solid #243449;
-      text-decoration: none;
-      color: var(--text);
-    }
+    .prox-banner { display: none; margin-top: 10px; border: 1px solid var(--accent); background: rgba(16,185,129,0.1); color: var(--text); border-radius: 12px; padding: 10px; }
+    .prox-banner a { display: inline-block; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #0f223a; border: 1px solid #243449; text-decoration: none; color: var(--text); }
 
-    /* ---------- AR SECTION (full screen overlay within the same page) ---------- */
+    /* ---------- AR SECTION: keep mounted, toggle visibility (NO display:none) ---------- */
     #arSection {
-      display: none;                  /* revealed automatically when within threshold */
-      position: fixed;
-      inset: 0;
-      background: #000;
-      z-index: 100;                   /* over everything */
+      position: fixed; inset: 0; background: #000; z-index: 100;
+      opacity: 0; pointer-events: none; transition: opacity .2s ease;
     }
+    #arSection.visible { opacity: 1; pointer-events: auto; }
+
     #arTopBar {
       position: fixed; inset: env(safe-area-inset-top) 0 auto 0;
       display: flex; justify-content: center; padding: 12px; z-index: 110; pointer-events: none;
@@ -133,8 +94,7 @@
 
     .arControls {
       position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px; display: grid; gap: 8px;
-      background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 20%); z-index: 110;
-      font-family: system-ui, sans-serif; color: #fff;
+      background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 20%); z-index: 110; font-family: system-ui, sans-serif; color: #fff;
     }
     .arRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .panel2 { display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: rgba(0,0,0,.45); backdrop-filter: blur(6px); }
@@ -144,7 +104,7 @@
     .btn:active { transform: translateY(1px); }
   </style>
 
-  <!-- A-Frame + AR.js (for camera background + WebGL scene) -->
+  <!-- A-Frame + AR.js -->
   <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
 </head>
@@ -289,7 +249,7 @@
     </footer>
   </div>
 
-  <!-- --------------- AR SECTION (hidden until within threshold) --------------- -->
+  <!-- --------------- AR SECTION (kept mounted; visibility toggled) --------------- -->
   <div id="arSection" role="region" aria-label="AR View">
     <div id="arTopBar">
       <div class="panel">
@@ -312,18 +272,14 @@
         sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
       ">
       <a-assets>
-        <!-- Will be swapped dynamically to #dynModel -->
         <a-asset-item id="dynModel" src="test.glb"></a-asset-item>
       </a-assets>
 
-      <!-- Lighting -->
       <a-entity light="type: ambient; intensity: 0.8"></a-entity>
       <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
 
-      <!-- Camera rig and model holder -->
       <a-entity id="rig">
         <a-entity id="cam" camera look-controls wasd-controls="enabled:false"></a-entity>
-        <!-- Holder will be positioned relative to camera based on heading vs bearing(B→A) -->
         <a-entity id="holder" position="0 0 -2">
           <a-entity id="modelEntity" gltf-model="#dynModel" shadow="cast: true; receive: true"></a-entity>
         </a-entity>
@@ -361,7 +317,7 @@
   </div>
 
   <script>
-    // -------------------- Shared Utilities (from your first page) --------------------
+    // -------------------- Utilities --------------------
     const $ = (sel, root=document) => root.querySelector(sel);
     const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
     function fmtNum(n, digits=6) { return Number.isFinite(n) ? n.toFixed(digits).replace(/\.0+$/,'') : '–'; }
@@ -475,14 +431,12 @@
     const arClose = $('#arClose');
     const arSnap = $('#arSnap');
 
-    // dynamic model URL from the form
     function ensureModelUrl() {
       const url = ($('#modelUrl').value || '').trim() || 'test.glb';
       const asset = $('#dynModel');
       if (asset.getAttribute('src') !== url) {
         asset.setAttribute('src', url);
-        // Force model reload
-        modelEl.setAttribute('gltf-model', '#dynModel');
+        modelEl.setAttribute('gltf-model', '#dynModel'); // rebind to reload
       }
     }
 
@@ -520,12 +474,11 @@
       }
     });
     arStart.addEventListener('click', async () => {
-      // iOS 13+ requires explicit permission request for orientation
       await requestHeadingPermission();
       await startAR();
     });
     arFlip.addEventListener('click', flipCamera);
-    arClose.addEventListener('click', () => { arSection.style.display = 'none'; });
+    arClose.addEventListener('click', () => { hideAR(); });
     arSnap.addEventListener('click', ()=>{
       const renderer = arScene.renderer; if (!renderer) return alert('Renderer not ready.');
       renderer.preserveDrawingBuffer = true;
@@ -538,7 +491,6 @@
     const arDist = $('#arDist'), arHeight = $('#arHeight'), arRotY = $('#arRotY'), arScale = $('#arScale');
     const arDistVal = $('#arDistVal'), arHeightVal = $('#arHeightVal'), arRotYVal = $('#arRotYVal'), arScaleVal = $('#arScaleVal');
     function updateARTransforms(){
-      // Holder XYZ set by heading/bearing (x,z). Height controlled here.
       holder.object3D.position.y = parseFloat(arHeight.value);
       arHeightVal.textContent = parseFloat(arHeight.value).toFixed(2);
 
@@ -551,7 +503,6 @@
       modelEl.object3D.scale.set(s, s, s);
 
       arDistVal.textContent = parseFloat(arDist.value).toFixed(1);
-      // x/z are recalculated continuously from heading + bearing (see animate loop)
     }
     [arDist, arHeight, arRotY, arScale].forEach(i => i.addEventListener('input', updateARTransforms));
     $('#arReset').addEventListener('click', ()=>{ arDist.value=2; arHeight.value=0; arRotY.value=0; arScale.value=1; updateARTransforms(); });
@@ -564,8 +515,7 @@
     async function requestHeadingPermission(){
       try {
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-          const res = await DeviceOrientationEvent.requestPermission();
-          // 'granted' or 'denied'
+          await DeviceOrientationEvent.requestPermission(); // 'granted' or 'denied'
         }
       } catch(e) { /* ignore */ }
     }
@@ -575,12 +525,10 @@
     function onOrientation(e){
       let headingDeg = null;
       if (e.absolute && typeof e.alpha === 'number') {
-        // alpha typically relative to true north in 'absolute' events
-        headingDeg = 360 - e.alpha; // convert to compass (0=N, clockwise)
+        headingDeg = 360 - e.alpha;
       } else if (typeof e.webkitCompassHeading === 'number') {
         headingDeg = e.webkitCompassHeading; // iOS
       } else if (typeof e.alpha === 'number') {
-        // Fallback (not true-north aligned): still usable for relative direction
         headingDeg = 360 - e.alpha;
       }
       if (headingDeg != null) {
@@ -591,7 +539,24 @@
     }
 
     // ---------------- Distance + AR coupling ----------------
-    let lastBearingBA = null; // Bearing from B -> A (what you asked)
+    let lastBearingBA = null; // Bearing from B -> A
+
+    function showAR() {
+      ensureModelUrl();
+      arSection.classList.add('visible');
+
+      // try to start camera if it's not already ready (non-iOS or already granted)
+      const sys = arScene.systems && arScene.systems['arjs'];
+      if (sys && sys.arSource && sys.arSource.ready === false) {
+        // Fire and forget; iOS may still require the Start button
+        startAR();
+      }
+    }
+    function hideAR() {
+      arSection.classList.remove('visible');
+      // IMPORTANT: Do NOT stop arSource here. Keeping the video stream alive prevents camera glitches.
+    }
+
     function updateDistance(isUserGesture=false) {
       const vals = readInputs();
       if (!vals) {
@@ -599,12 +564,13 @@
         $('#outBear').textContent = '–';
         $('#outDir').textContent = '–';
         hideProxBanner();
+        hideAR();
         return;
       }
 
       const dMeters = haversine(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
       const bearingAB = initialBearing(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
-      const bearingBA = initialBearing(vals.bLat, vals.bLng, vals.aLat, vals.aLng); // <-- direction from B to A
+      const bearingBA = initialBearing(vals.bLat, vals.bLng, vals.aLat, vals.aLng);
       lastBearingBA = bearingBA;
       updateOutputs(dMeters, bearingAB);
 
@@ -622,15 +588,14 @@
         }
       } else { alertShown = false; $('#outDist').style.color = 'inherit'; }
 
-      // Show AR overlay when within threshold
+      // AR visibility based on threshold
       if (dMeters < threshold) {
-        ensureModelUrl();
-        arSection.style.display = 'block';
+        showAR();
       } else if (dMeters > threshold + 20) {
-        arSection.style.display = 'none';
+        hideAR();
       }
 
-      // Legacy optional link behavior
+      // Optional link behavior
       if (url && dMeters < threshold) {
         if (!linkOpened) {
           linkOpened = true; hideProxBanner();
@@ -659,25 +624,17 @@
     });
 
     // ---------------- Place object based on (bearing B->A) vs current heading ----------------
-    // We place the holder at distance R in the direction delta = bearingBA - heading, in camera space:
-    // x = R * sin(delta), z = -R * cos(delta)
     function placeObjectByHeading(){
-      const R = parseFloat(arDist.value) || 2;
+      const R = parseFloat($('#arDist').value) || 2;
       const bearing = (lastBearingBA == null) ? null : (lastBearingBA % 360);
       const heading = (deviceHeading != null) ? (deviceHeading % 360) : null;
-
-      if (bearing == null) return; // need computed bearing first (run distance calc)
-
-      // If no heading yet, default to placing it in front (delta=0)
-      const deltaDeg = (heading == null) ? 0 : ((bearing - heading + 540) % 360) - 180; // normalize to [-180,180]
+      if (bearing == null) return;
+      const deltaDeg = (heading == null) ? 0 : ((bearing - heading + 540) % 360) - 180;
       const deltaRad = toRad(deltaDeg);
-
-      // Update X/Z every frame to keep alignment as you turn
       holder.object3D.position.x = R * Math.sin(deltaRad);
       holder.object3D.position.z = -R * Math.cos(deltaRad);
     }
 
-    // Animate loop to keep the object aligned as you rotate the phone
     function animate(){
       placeObjectByHeading();
       requestAnimationFrame(animate);
@@ -693,3 +650,4 @@
   </script>
 </body>
 </html>
+
