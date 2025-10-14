@@ -112,13 +112,10 @@
       color: var(--text);
     }
 
-    /* ---------- AR SECTION (overlay, gated; camera stays off until allowed) ---------- */
+    /* ---------- AR SECTION (overlay; camera fully gated) ---------- */
     #arSection {
-      display: none;                  /* revealed automatically when within threshold */
-      position: fixed;
-      inset: 0;
-      background: #000;
-      z-index: 100;                   /* over everything */
+      display: none;                  /* shown only when within threshold */
+      position: fixed; inset: 0; background: #000; z-index: 100;
     }
     #arTopBar {
       position: fixed; inset: env(safe-area-inset-top) 0 auto 0;
@@ -130,7 +127,7 @@
       display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px);
     }
     #arTopBar .panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
-    #arStart[disabled] { opacity: .5; cursor: not-allowed; }
+    #arStart[disabled], #arFlip[disabled], #arSnap[disabled] { opacity: .5; cursor: not-allowed; }
 
     .arControls {
       position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px; display: grid; gap: 8px;
@@ -145,7 +142,7 @@
     .btn:active { transform: translateY(1px); }
   </style>
 
-  <!-- A-Frame + AR.js (scene present, but we won't start the camera until allowed) -->
+  <!-- A-Frame + AR.js libraries (we will ATTACH arjs later, only after gating) -->
   <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
 </head>
@@ -234,7 +231,7 @@
           </div>
           <div style="display:flex; flex-direction:column; gap:10px;">
             <button id="btnCalc">Calculate distance</button>
-            <div class="small">Show AR (and enable camera) when within:</div>
+            <div class="small">Enable AR (and camera) when within:</div>
             <div class="row">
               <div>
                 <label>Threshold (meters)</label>
@@ -286,11 +283,11 @@
     </div>
 
     <footer>
-      Built with the Web Geolocation API + A-Frame/AR.js. No camera permission asked until distance says so.
+      Built with the Web Geolocation API + A-Frame/AR.js. Camera is **not** accessed until you’re within range and press Start.
     </footer>
   </div>
 
-  <!-- --------------- AR SECTION (hidden/gated; camera disabled until allowed) --------------- -->
+  <!-- --------------- AR SECTION (hidden & disabled until within threshold) --------------- -->
   <div id="arSection" role="region" aria-label="AR View">
     <div id="arTopBar">
       <div class="panel">
@@ -302,16 +299,9 @@
       </div>
     </div>
 
+    <!-- NOTE: arjs is NOT attached here initially. We add it later in JS only after gating. -->
     <a-scene id="arScene" embedded vr-mode-ui="enabled: false"
-      renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
-      arjs="
-        sourceType: webcam;
-        facingMode: environment;
-        debugUIEnabled: false;
-        videoTexture: true;
-        trackingMethod: best;
-        sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
-      ">
+      renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance">
       <a-assets>
         <a-asset-item id="dynModel" src="test.glb"></a-asset-item>
       </a-assets>
@@ -323,7 +313,6 @@
       <!-- Camera rig and model holder -->
       <a-entity id="rig">
         <a-entity id="cam" camera look-controls wasd-controls="enabled:false"></a-entity>
-        <!-- Holder positioned relative to camera by heading vs bearing(B→A) -->
         <a-entity id="holder" position="0 0 -2">
           <a-entity id="modelEntity" gltf-model="#dynModel" shadow="cast: true; receive: true"></a-entity>
         </a-entity>
@@ -464,7 +453,7 @@
       if (!isHttps) setStatus('Site must be HTTPS or localhost for precise location', 'warn'); else setStatus('ready', 'ok');
     })();
 
-    // ---------------------------- AR Control (Gated) ----------------------------
+    // ---------------------------- AR Control (Strictly Gated) ----------------------------
     const arSection = $('#arSection');
     const arScene = $('#arScene');
     const holder = $('#holder');
@@ -475,16 +464,17 @@
     const arClose = $('#arClose');
     const arSnap = $('#arSnap');
 
-    let arEligible = false; // until distance < threshold once
+    let arEligible = false;               // becomes true when distance < threshold
+    let arAttached = false;               // we attach arjs only when user presses Start after eligible
 
-    // DO NOT request heading permission or camera until user presses Start AND eligible
-    async function requestHeadingPermission(){
-      try {
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-          await DeviceOrientationEvent.requestPermission();
-        }
-      } catch(e) { /* ignore */ }
-    }
+    const ARJS_PARAMS = [
+      'sourceType: webcam',
+      'facingMode: environment',
+      'debugUIEnabled: false',
+      'videoTexture: true',
+      'trackingMethod: best',
+      'sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720'
+    ].join('; ');
 
     function ensureModelUrl() {
       const url = ($('#modelUrl').value || '').trim() || 'test.glb';
@@ -494,15 +484,23 @@
         modelEl.setAttribute('gltf-model', '#dynModel');
       }
     }
-
     function setARStatus(msg){ arStatus.textContent = msg; }
 
+    async function attachARIfNeeded(){
+      if (arAttached) return;
+      arScene.setAttribute('arjs', ARJS_PARAMS);   // <-- attach AR.js *now*
+      arAttached = true;
+      // allow a tick so system registers
+      await new Promise(r=>requestAnimationFrame(r));
+    }
+
     async function startAR(){
-      if (!arEligible) return; // hard gate
+      if (!arEligible) return;
       try{
+        await attachARIfNeeded();                  // attach arjs only at start time
         const sys = arScene.systems && arScene.systems['arjs'];
         if (sys && sys.arSource && sys.arSource.ready === false) {
-          await sys.arSource.start();
+          await sys.arSource.start();              // finally start camera
         }
         setARStatus('Camera started');
         arFlip.disabled = false;
@@ -522,23 +520,23 @@
         setARStatus('Camera: ' + (usingFront ? 'front' : 'rear'));
       } catch (e) { setARStatus('Flip failed: ' + e.message); }
     }
-    document.addEventListener('visibilitychange', () => {
-      const sys = arScene.systems && arScene.systems['arjs'];
-      if (!sys || !sys.arSource) return;
-      if (!document.hidden) {
-        const video = sys.arSource.domElement;
-        if (video && (video.paused || video.readyState < 2)) {
-          sys.arSource.start().then(()=> setARStatus('Resumed after tab switch'));
-        }
-      }
-    });
+
     arStart.addEventListener('click', async () => {
       if (!arEligible) return;
-      await requestHeadingPermission();
-      await startAR();
+      await requestHeadingPermission();           // iOS orientation permission
+      await startAR();                            // starts camera only now
     });
     arFlip.addEventListener('click', flipCamera);
-    arClose.addEventListener('click', () => { arSection.style.display = 'none'; });
+    arClose.addEventListener('click', async () => {
+      arSection.style.display = 'none';
+      // OPTIONAL: stop camera when closing overlay
+      const sys = arScene.systems && arScene.systems['arjs'];
+      if (sys && sys.arSource && sys.arSource.ready) {
+        try { await sys.arSource.stop(); } catch(e){}
+        setARStatus('Camera stopped');
+        arFlip.disabled = true; arSnap.disabled = true;
+      }
+    });
     arSnap.addEventListener('click', ()=>{
       const renderer = arScene.renderer; if (!renderer) return alert('Renderer not ready.');
       renderer.preserveDrawingBuffer = true;
@@ -569,7 +567,14 @@
     let deviceHeading = null; // 0..360 (0 = North)
     const headingReadout = $('#headingReadout');
 
-    // Note: We only start listening to orientation AFTER AR is eligible & Start pressed (for privacy).
+    async function requestHeadingPermission(){
+      try {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          await DeviceOrientationEvent.requestPermission();
+        }
+      } catch(e) { /* ignore */ }
+    }
+    // Add listeners only after AR becomes eligible (privacy-friendly)
     function enableHeadingEvents(){
       window.addEventListener('deviceorientationabsolute', onOrientation, true);
       window.addEventListener('deviceorientation', onOrientation, true);
@@ -600,7 +605,6 @@
         $('#outBear').textContent = '–';
         $('#outDir').textContent = '–';
         hideProxBanner();
-        // Lock AR
         gateAR(false);
         return;
       }
@@ -615,7 +619,6 @@
       const url = ($('#proxUrl').value || '').trim();
       const openMode = $('#openMode').value;
 
-      // 50m ping
       if (dMeters < 50) {
         if (!alertShown) {
           alertShown = true;
@@ -625,7 +628,6 @@
         }
       } else { alertShown = false; $('#outDist').style.color = 'inherit'; }
 
-      // Gate AR strictly by distance; do not start camera automatically
       if (dMeters < threshold) {
         ensureModelUrl();
         gateAR(true);
@@ -633,7 +635,6 @@
         gateAR(false);
       }
 
-      // Optional legacy link behavior
       if (url && dMeters < threshold) {
         if (!linkOpened) {
           linkOpened = true; hideProxBanner();
@@ -649,17 +650,20 @@
       arEligible = enable;
       if (enable) {
         arSection.style.display = 'block';
-        $('#arStart').disabled = false;      // allow user to start camera now
+        arStart.disabled = false;        // user can start camera now
         setARStatus('Within threshold. Tap Start Camera to enable AR.');
-        enableHeadingEvents();               // begin heading listeners (no permission prompt yet)
+        enableHeadingEvents();           // start heading listeners (no prompt yet)
       } else {
         arSection.style.display = 'none';
-        $('#arStart').disabled = true;
-        $('#arFlip').disabled  = true;
-        $('#arSnap').disabled  = true;
+        arStart.disabled = true;
+        arFlip.disabled  = true;
+        arSnap.disabled  = true;
         setARStatus('AR locked. Calculate distance to enable.');
-        // We don't stop the AR source here because it might not have started.
-        // If it had started and user leaves range, we hide overlay; user can reopen when back in range.
+        // Optional: stop camera if it was running and you leave range
+        const sys = arScene.systems && arScene.systems['arjs'];
+        if (sys && sys.arSource && sys.arSource.ready) {
+          sys.arSource.stop().catch(()=>{});
+        }
       }
     }
 
@@ -680,22 +684,19 @@
     });
 
     // ---------------- Place object based on (bearing B->A) vs current heading ----------------
-    // x = R * sin(delta), z = -R * cos(delta), where delta = bearingBA - heading
     function placeObjectByHeading(){
+      if (!arEligible) return;
       const R = parseFloat($('#arDist').value) || 2;
       const bearing = (lastBearingBA == null) ? null : (lastBearingBA % 360);
       const heading = (deviceHeading != null) ? (deviceHeading % 360) : null;
-      if (bearing == null) return; // need a calc first
+      if (bearing == null) return;
       const deltaDeg = (heading == null) ? 0 : ((bearing - heading + 540) % 360) - 180; // [-180,180]
       const deltaRad = toRad(deltaDeg);
       holder.object3D.position.x = R * Math.sin(deltaRad);
       holder.object3D.position.z = -R * Math.cos(deltaRad);
     }
 
-    function animate(){
-      if (arEligible) placeObjectByHeading();
-      requestAnimationFrame(animate);
-    }
+    function animate(){ placeObjectByHeading(); requestAnimationFrame(animate); }
     animate();
 
     // Initial AR status hint
