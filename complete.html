@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>GPS & Distance Helper + AR glTF (Camera gated by distance)</title>
+  <title>GPS & Distance Helper + AR glTF (Single Page)</title>
   <style>
     :root {
       --bg: #0f172a;        /* slate-900 */
@@ -112,10 +112,13 @@
       color: var(--text);
     }
 
-    /* ---------- AR SECTION (overlay; camera fully gated) ---------- */
+    /* ---------- AR SECTION (full screen overlay within the same page) ---------- */
     #arSection {
-      display: none;                  /* shown only when within threshold */
-      position: fixed; inset: 0; background: #000; z-index: 100;
+      display: none;                  /* revealed automatically when within threshold */
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 100;                   /* over everything */
     }
     #arTopBar {
       position: fixed; inset: env(safe-area-inset-top) 0 auto 0;
@@ -127,7 +130,6 @@
       display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px);
     }
     #arTopBar .panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
-    #arStart[disabled], #arFlip[disabled], #arSnap[disabled] { opacity: .5; cursor: not-allowed; }
 
     .arControls {
       position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px; display: grid; gap: 8px;
@@ -142,7 +144,7 @@
     .btn:active { transform: translateY(1px); }
   </style>
 
-  <!-- A-Frame + AR.js libraries (we will ATTACH arjs later, only after gating) -->
+  <!-- A-Frame + AR.js (for camera background + WebGL scene) -->
   <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
 </head>
@@ -190,7 +192,7 @@
       <!-- DISTANCE -->
       <section class="card" aria-labelledby="distanceHdr">
         <h2 id="distanceHdr">Distance Calculator</h2>
-        <p class="sub">Compute great-circle distance (Haversine) between two points. When within threshold, AR becomes available.</p>
+        <p class="sub">Compute great-circle distance (Haversine) between two points. When within threshold, AR shows below.</p>
 
         <div class="btn-row" style="margin-bottom:8px">
           <button id="useCurrentForA">Use current → Point A</button>
@@ -231,7 +233,7 @@
           </div>
           <div style="display:flex; flex-direction:column; gap:10px;">
             <button id="btnCalc">Calculate distance</button>
-            <div class="small">Enable AR (and camera) when within:</div>
+            <div class="small">Show AR when within:</div>
             <div class="row">
               <div>
                 <label>Threshold (meters)</label>
@@ -283,26 +285,34 @@
     </div>
 
     <footer>
-      Built with the Web Geolocation API + A-Frame/AR.js. Camera is **not** accessed until you’re within range and press Start.
+      Built with the Web Geolocation API + A-Frame/AR.js. No external servers. Your coordinates stay on-device.
     </footer>
   </div>
 
-  <!-- --------------- AR SECTION (hidden & disabled until within threshold) --------------- -->
+  <!-- --------------- AR SECTION (hidden until within threshold) --------------- -->
   <div id="arSection" role="region" aria-label="AR View">
     <div id="arTopBar">
       <div class="panel">
-        <span id="arStatus">AR locked. Calculate distance to enable.</span>
-        <button id="arStart" disabled>Start Camera</button>
-        <button id="arFlip" disabled>Flip Cam</button>
-        <button id="arSnap" disabled>📸 Take Photo</button>
+        <span id="arStatus">If you see black, tap Start (iOS needs a gesture).</span>
+        <button id="arStart">Start Camera</button>
+        <button id="arFlip">Flip Cam</button>
+        <button id="arSnap">📸 Take Photo</button>
         <button id="arClose">Close AR</button>
       </div>
     </div>
 
-    <!-- NOTE: arjs is NOT attached here initially. We add it later in JS only after gating. -->
     <a-scene id="arScene" embedded vr-mode-ui="enabled: false"
-      renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance">
+      renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
+      arjs="
+        sourceType: webcam;
+        facingMode: environment;
+        debugUIEnabled: false;
+        videoTexture: true;
+        trackingMethod: best;
+        sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
+      ">
       <a-assets>
+        <!-- Will be swapped dynamically to #dynModel -->
         <a-asset-item id="dynModel" src="test.glb"></a-asset-item>
       </a-assets>
 
@@ -313,6 +323,7 @@
       <!-- Camera rig and model holder -->
       <a-entity id="rig">
         <a-entity id="cam" camera look-controls wasd-controls="enabled:false"></a-entity>
+        <!-- Holder will be positioned relative to camera based on heading vs bearing(B→A) -->
         <a-entity id="holder" position="0 0 -2">
           <a-entity id="modelEntity" gltf-model="#dynModel" shadow="cast: true; receive: true"></a-entity>
         </a-entity>
@@ -350,7 +361,7 @@
   </div>
 
   <script>
-    // -------------------- Shared Utilities --------------------
+    // -------------------- Shared Utilities (from your first page) --------------------
     const $ = (sel, root=document) => root.querySelector(sel);
     const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
     function fmtNum(n, digits=6) { return Number.isFinite(n) ? n.toFixed(digits).replace(/\.0+$/,'') : '–'; }
@@ -361,6 +372,7 @@
       el.classList.remove('ok','warn','err'); el.classList.add(mode);
     }
     function toRad(deg){ return deg * Math.PI / 180; }
+    function toDeg(rad){ return rad * 180 / Math.PI; }
     function haversine(lat1, lon1, lat2, lon2) {
       const R = 6371_000; const φ1 = toRad(lat1), φ2 = toRad(lat2);
       const Δφ = toRad(lat2 - lat1), Δλ = toRad(lon2 - lon1);
@@ -390,7 +402,7 @@
       $('#acc').textContent = fmtNum(accuracy, 1);
       $('#ts').textContent = tsFmt(pos.timestamp);
       setStatus(watchId ? 'watching…' : 'position acquired', 'ok');
-      if (auto && autoFillTarget === 'B') fillCurrentInto('B');
+      if (auto && autoFillTarget === 'B') fillCurrentInto('B'); // live fill if wanted
     }
     function onPosError(err) {
       console.error(err);
@@ -436,7 +448,6 @@
     function hideProxBanner() { banner.style.display = 'none'; }
 
     let auto = false; let autoFillTarget = 'B'; let alertShown = false; let linkOpened = false;
-
     function fillCurrentInto(target) {
       const lat = parseFloat($('#lat').textContent);
       const lng = parseFloat($('#lng').textContent);
@@ -453,7 +464,7 @@
       if (!isHttps) setStatus('Site must be HTTPS or localhost for precise location', 'warn'); else setStatus('ready', 'ok');
     })();
 
-    // ---------------------------- AR Control (Strictly Gated) ----------------------------
+    // ---------------------------- AR Control Plumbing ----------------------------
     const arSection = $('#arSection');
     const arScene = $('#arScene');
     const holder = $('#holder');
@@ -464,50 +475,28 @@
     const arClose = $('#arClose');
     const arSnap = $('#arSnap');
 
-    let arEligible = false;               // becomes true when distance < threshold
-    let arAttached = false;               // we attach arjs only when user presses Start after eligible
-
-    const ARJS_PARAMS = [
-      'sourceType: webcam',
-      'facingMode: environment',
-      'debugUIEnabled: false',
-      'videoTexture: true',
-      'trackingMethod: best',
-      'sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720'
-    ].join('; ');
-
+    // dynamic model URL from the form
     function ensureModelUrl() {
       const url = ($('#modelUrl').value || '').trim() || 'test.glb';
       const asset = $('#dynModel');
       if (asset.getAttribute('src') !== url) {
         asset.setAttribute('src', url);
+        // Force model reload
         modelEl.setAttribute('gltf-model', '#dynModel');
       }
     }
+
     function setARStatus(msg){ arStatus.textContent = msg; }
 
-    async function attachARIfNeeded(){
-      if (arAttached) return;
-      arScene.setAttribute('arjs', ARJS_PARAMS);   // <-- attach AR.js *now*
-      arAttached = true;
-      // allow a tick so system registers
-      await new Promise(r=>requestAnimationFrame(r));
-    }
-
     async function startAR(){
-      if (!arEligible) return;
       try{
-        await attachARIfNeeded();                  // attach arjs only at start time
         const sys = arScene.systems && arScene.systems['arjs'];
         if (sys && sys.arSource && sys.arSource.ready === false) {
-          await sys.arSource.start();              // finally start camera
+          await sys.arSource.start();
         }
         setARStatus('Camera started');
-        arFlip.disabled = false;
-        arSnap.disabled = false;
       }catch(e){ setARStatus('Start failed: ' + e.message); }
     }
-
     let usingFront = false;
     async function flipCamera(){
       const sys = arScene.systems && arScene.systems['arjs'];
@@ -520,23 +509,23 @@
         setARStatus('Camera: ' + (usingFront ? 'front' : 'rear'));
       } catch (e) { setARStatus('Flip failed: ' + e.message); }
     }
-
-    arStart.addEventListener('click', async () => {
-      if (!arEligible) return;
-      await requestHeadingPermission();           // iOS orientation permission
-      await startAR();                            // starts camera only now
-    });
-    arFlip.addEventListener('click', flipCamera);
-    arClose.addEventListener('click', async () => {
-      arSection.style.display = 'none';
-      // OPTIONAL: stop camera when closing overlay
+    document.addEventListener('visibilitychange', () => {
       const sys = arScene.systems && arScene.systems['arjs'];
-      if (sys && sys.arSource && sys.arSource.ready) {
-        try { await sys.arSource.stop(); } catch(e){}
-        setARStatus('Camera stopped');
-        arFlip.disabled = true; arSnap.disabled = true;
+      if (!sys || !sys.arSource) return;
+      if (!document.hidden) {
+        const video = sys.arSource.domElement;
+        if (video && (video.paused || video.readyState < 2)) {
+          sys.arSource.start().then(()=> setARStatus('Resumed after tab switch'));
+        }
       }
     });
+    arStart.addEventListener('click', async () => {
+      // iOS 13+ requires explicit permission request for orientation
+      await requestHeadingPermission();
+      await startAR();
+    });
+    arFlip.addEventListener('click', flipCamera);
+    arClose.addEventListener('click', () => { arSection.style.display = 'none'; });
     arSnap.addEventListener('click', ()=>{
       const renderer = arScene.renderer; if (!renderer) return alert('Renderer not ready.');
       renderer.preserveDrawingBuffer = true;
@@ -549,15 +538,20 @@
     const arDist = $('#arDist'), arHeight = $('#arHeight'), arRotY = $('#arRotY'), arScale = $('#arScale');
     const arDistVal = $('#arDistVal'), arHeightVal = $('#arHeightVal'), arRotYVal = $('#arRotYVal'), arScaleVal = $('#arScaleVal');
     function updateARTransforms(){
+      // Holder XYZ set by heading/bearing (x,z). Height controlled here.
       holder.object3D.position.y = parseFloat(arHeight.value);
       arHeightVal.textContent = parseFloat(arHeight.value).toFixed(2);
+
       const y = parseFloat(arRotY.value);
       arRotYVal.textContent = y.toFixed(0);
       modelEl.object3D.rotation.set(0, THREE.MathUtils.degToRad(y), 0);
+
       const s = parseFloat(arScale.value);
       arScaleVal.textContent = s.toFixed(2);
       modelEl.object3D.scale.set(s, s, s);
+
       arDistVal.textContent = parseFloat(arDist.value).toFixed(1);
+      // x/z are recalculated continuously from heading + bearing (see animate loop)
     }
     [arDist, arHeight, arRotY, arScale].forEach(i => i.addEventListener('input', updateARTransforms));
     $('#arReset').addEventListener('click', ()=>{ arDist.value=2; arHeight.value=0; arRotY.value=0; arScale.value=1; updateARTransforms(); });
@@ -570,23 +564,23 @@
     async function requestHeadingPermission(){
       try {
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-          await DeviceOrientationEvent.requestPermission();
+          const res = await DeviceOrientationEvent.requestPermission();
+          // 'granted' or 'denied'
         }
       } catch(e) { /* ignore */ }
     }
-    // Add listeners only after AR becomes eligible (privacy-friendly)
-    function enableHeadingEvents(){
-      window.addEventListener('deviceorientationabsolute', onOrientation, true);
-      window.addEventListener('deviceorientation', onOrientation, true);
-    }
+
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
     function onOrientation(e){
-      if (!arEligible) return;
       let headingDeg = null;
       if (e.absolute && typeof e.alpha === 'number') {
-        headingDeg = 360 - e.alpha;
+        // alpha typically relative to true north in 'absolute' events
+        headingDeg = 360 - e.alpha; // convert to compass (0=N, clockwise)
       } else if (typeof e.webkitCompassHeading === 'number') {
-        headingDeg = e.webkitCompassHeading;
+        headingDeg = e.webkitCompassHeading; // iOS
       } else if (typeof e.alpha === 'number') {
+        // Fallback (not true-north aligned): still usable for relative direction
         headingDeg = 360 - e.alpha;
       }
       if (headingDeg != null) {
@@ -596,8 +590,8 @@
       }
     }
 
-    // ---------------- Distance + AR gating ----------------
-    let lastBearingBA = null; // Bearing from B -> A
+    // ---------------- Distance + AR coupling ----------------
+    let lastBearingBA = null; // Bearing from B -> A (what you asked)
     function updateDistance(isUserGesture=false) {
       const vals = readInputs();
       if (!vals) {
@@ -605,13 +599,12 @@
         $('#outBear').textContent = '–';
         $('#outDir').textContent = '–';
         hideProxBanner();
-        gateAR(false);
         return;
       }
 
       const dMeters = haversine(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
       const bearingAB = initialBearing(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
-      const bearingBA = initialBearing(vals.bLat, vals.bLng, vals.aLat, vals.aLng);
+      const bearingBA = initialBearing(vals.bLat, vals.bLng, vals.aLat, vals.aLng); // <-- direction from B to A
       lastBearingBA = bearingBA;
       updateOutputs(dMeters, bearingAB);
 
@@ -619,6 +612,7 @@
       const url = ($('#proxUrl').value || '').trim();
       const openMode = $('#openMode').value;
 
+      // Nice 50m ping
       if (dMeters < 50) {
         if (!alertShown) {
           alertShown = true;
@@ -628,13 +622,15 @@
         }
       } else { alertShown = false; $('#outDist').style.color = 'inherit'; }
 
+      // Show AR overlay when within threshold
       if (dMeters < threshold) {
         ensureModelUrl();
-        gateAR(true);
-      } else {
-        gateAR(false);
+        arSection.style.display = 'block';
+      } else if (dMeters > threshold + 20) {
+        arSection.style.display = 'none';
       }
 
+      // Legacy optional link behavior
       if (url && dMeters < threshold) {
         if (!linkOpened) {
           linkOpened = true; hideProxBanner();
@@ -644,27 +640,6 @@
           } else showProxBanner(url);
         }
       } else if (dMeters > threshold + 20) { linkOpened = false; hideProxBanner(); }
-    }
-
-    function gateAR(enable){
-      arEligible = enable;
-      if (enable) {
-        arSection.style.display = 'block';
-        arStart.disabled = false;        // user can start camera now
-        setARStatus('Within threshold. Tap Start Camera to enable AR.');
-        enableHeadingEvents();           // start heading listeners (no prompt yet)
-      } else {
-        arSection.style.display = 'none';
-        arStart.disabled = true;
-        arFlip.disabled  = true;
-        arSnap.disabled  = true;
-        setARStatus('AR locked. Calculate distance to enable.');
-        // Optional: stop camera if it was running and you leave range
-        const sys = arScene.systems && arScene.systems['arjs'];
-        if (sys && sys.arSource && sys.arSource.ready) {
-          sys.arSource.stop().catch(()=>{});
-        }
-      }
     }
 
     $('#btnCalc').addEventListener('click', () => updateDistance(true));
@@ -684,28 +659,37 @@
     });
 
     // ---------------- Place object based on (bearing B->A) vs current heading ----------------
+    // We place the holder at distance R in the direction delta = bearingBA - heading, in camera space:
+    // x = R * sin(delta), z = -R * cos(delta)
     function placeObjectByHeading(){
-      if (!arEligible) return;
-      const R = parseFloat($('#arDist').value) || 2;
+      const R = parseFloat(arDist.value) || 2;
       const bearing = (lastBearingBA == null) ? null : (lastBearingBA % 360);
       const heading = (deviceHeading != null) ? (deviceHeading % 360) : null;
-      if (bearing == null) return;
-      const deltaDeg = (heading == null) ? 0 : ((bearing - heading + 540) % 360) - 180; // [-180,180]
+
+      if (bearing == null) return; // need computed bearing first (run distance calc)
+
+      // If no heading yet, default to placing it in front (delta=0)
+      const deltaDeg = (heading == null) ? 0 : ((bearing - heading + 540) % 360) - 180; // normalize to [-180,180]
       const deltaRad = toRad(deltaDeg);
+
+      // Update X/Z every frame to keep alignment as you turn
       holder.object3D.position.x = R * Math.sin(deltaRad);
       holder.object3D.position.z = -R * Math.cos(deltaRad);
     }
 
-    function animate(){ placeObjectByHeading(); requestAnimationFrame(animate); }
+    // Animate loop to keep the object aligned as you rotate the phone
+    function animate(){
+      placeObjectByHeading();
+      requestAnimationFrame(animate);
+    }
     animate();
 
-    // Initial AR status hint
+    // -------------- Initial AR status hint --------------
     if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
       setARStatus('Use HTTPS or localhost for camera access');
     } else {
-      setARStatus('AR locked. Calculate distance to enable.');
+      setARStatus('If you see black, tap Start (iOS requires a gesture)');
     }
   </script>
 </body>
 </html>
-
