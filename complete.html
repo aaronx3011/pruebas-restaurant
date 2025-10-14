@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>GPS & Distance Helper + AR glTF (Single Page)</title>
+  <style>
+    :root {
+      --bg: #0f172a;        /* slate-900 */
+      --panel: #111827;     /* gray-900 */
+      --muted: #94a3b8;     /* slate-400 */
+      --text: #e5e7eb;      /* gray-200 */
+      --accent: #10b981;    /* emerald-500 */
+      --accent-2: #38bdf8;  /* sky-400 */
+      --danger: #ef4444;    /* red-500 */
+      --warn: #f59e0b;      /* amber-500 */
+      --card: #0b1220;      /* custom */
+      --border: #1f2937;    /* gray-800 */
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 70% -10%, #0b1d34 0%, var(--bg) 45%);
+      color: var(--text);
+      display: grid; place-items: start center; padding: 24px;
+    }
+    .container { width: min(980px, 100%); display: grid; gap: 16px; }
+    header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 16px; border: 1px solid var(--border); border-radius: 16px; background: linear-gradient(180deg, #0c1425 0%, #0a0f1a 100%);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    header h1 { font-size: clamp(18px, 3.6vw, 24px); margin: 0; letter-spacing: .2px; }
+    header .hint { color: var(--muted); font-size: 13px; }
+
+    .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+    @media (min-width: 860px) { .grid { grid-template-columns: 1fr 1fr; } }
+
+    .card {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, #0a0f1b 0%, #0a0e18 100%);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .card h2 { margin: 0 0 8px; font-size: 18px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+    label { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: block; }
+
+    input, select, button, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: #0b1220;
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    input::placeholder { color: #6b7280; }
+
+    button {
+      cursor: pointer; border: 1px solid #1f2937; background: linear-gradient(180deg, #1b2a3f 0%, #132235 100%);
+      transition: transform .05s ease, filter .2s ease, background .2s ease;
+    }
+    button:hover { filter: brightness(1.05); }
+    button:active { transform: translateY(1px); }
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: #0b1220; border: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+    .ok { color: var(--accent); }
+    .warn { color: var(--warn); }
+    .err { color: var(--danger); }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; color: #cbd5e1; }
+    .value { display: block; padding: 8px 10px; border-radius: 10px; background: #0b1220; border: 1px solid var(--border); }
+
+    .result {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center;
+      padding: 8px 10px; border-radius: 12px; background: #0b1220; border: 1px solid var(--border);
+    }
+    .result strong { font-size: 20px; }
+
+    footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 6px; }
+    .small { font-size: 12px; color: var(--muted); }
+    .hr { height: 1px; background: var(--border); margin: 12px 0; border-radius: 999px; }
+
+    /* Proximity banner */
+    .prox-banner {
+      display: none;
+      margin-top: 10px;
+      border: 1px solid var(--accent);
+      background: rgba(16,185,129,0.1);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px;
+    }
+    .prox-banner a {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: #0f223a;
+      border: 1px solid #243449;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    /* ---------- AR SECTION (full screen overlay within the same page) ---------- */
+    #arSection {
+      display: none;                  /* revealed automatically when within threshold */
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 100;                   /* over everything */
+    }
+    #arTopBar {
+      position: fixed; inset: env(safe-area-inset-top) 0 auto 0;
+      display: flex; justify-content: center; padding: 12px; z-index: 110; pointer-events: none;
+    }
+    #arTopBar .panel {
+      pointer-events: auto; background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px;
+      border-radius: 10px; font-family: system-ui, sans-serif; font-size: 14px;
+      display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px);
+    }
+    #arTopBar .panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+
+    .arControls {
+      position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px; display: grid; gap: 8px;
+      background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 20%); z-index: 110;
+      font-family: system-ui, sans-serif; color: #fff;
+    }
+    .arRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .panel2 { display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: rgba(0,0,0,.45); backdrop-filter: blur(6px); }
+    .panel2 label { font-size: 12px; color: #dbeafe; }
+    .panel2 input[type=range] { width: 100%; }
+    .btn { appearance: none; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; padding: 10px 12px; border-radius: 10px; font: 600 14px/1.2 system-ui, sans-serif; cursor: pointer; }
+    .btn:active { transform: translateY(1px); }
+  </style>
+
+  <!-- A-Frame + AR.js (for camera background + WebGL scene) -->
+  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>GPS & Distance Helper</h1>
+      <div class="hint">Works best on HTTPS (or localhost) and with Location permission enabled.</div>
+    </header>
+
+    <div class="grid">
+      <!-- CURRENT LOCATION -->
+      <section class="card" aria-labelledby="currentLocHdr">
+        <h2 id="currentLocHdr">Current Location</h2>
+        <p class="sub">Use your device's GPS to get precise coordinates.</p>
+        <div class="btn-row">
+          <button id="btnLocate">Get current location</button>
+          <button id="btnWatch">Start live updates</button>
+          <button id="btnStop" disabled>Stop updates</button>
+        </div>
+        <div class="hr"></div>
+        <div class="row">
+          <div>
+            <label>Latitude</label>
+            <code id="lat" class="value mono">–</code>
+          </div>
+          <div>
+            <label>Longitude</label>
+            <code id="lng" class="value mono">–</code>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Accuracy (meters)</label>
+            <code id="acc" class="value mono">–</code>
+          </div>
+          <div>
+            <label>Timestamp</label>
+            <code id="ts" class="value mono">–</code>
+          </div>
+        </div>
+        <p id="geoStatus" class="pill warn" role="status">Geolocation status: idle</p>
+      </section>
+
+      <!-- DISTANCE -->
+      <section class="card" aria-labelledby="distanceHdr">
+        <h2 id="distanceHdr">Distance Calculator</h2>
+        <p class="sub">Compute great-circle distance (Haversine) between two points. When within threshold, AR shows below.</p>
+
+        <div class="btn-row" style="margin-bottom:8px">
+          <button id="useCurrentForA">Use current → Point A</button>
+          <button id="useCurrentForB">Use current → Point B</button>
+          <button id="btnAuto">Toggle auto-update</button>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Point A — Latitude</label>
+            <input id="aLat" type="number" step="any" placeholder="e.g., 10.5001" />
+          </div>
+          <div>
+            <label>Point A — Longitude</label>
+            <input id="aLng" type="number" step="any" placeholder="e.g., -66.9170" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Point B — Latitude</label>
+            <input id="bLat" type="number" step="any" placeholder="e.g., 10.6417" />
+          </div>
+          <div>
+            <label>Point B — Longitude</label>
+            <input id="bLng" type="number" step="any" placeholder="e.g., -71.6127" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Units</label>
+            <select id="units">
+              <option value="km">Kilometers</option>
+              <option value="mi">Miles</option>
+              <option value="m">Meters</option>
+              <option value="nm">Nautical miles</option>
+            </select>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <button id="btnCalc">Calculate distance</button>
+            <div class="small">Show AR when within:</div>
+            <div class="row">
+              <div>
+                <label>Threshold (meters)</label>
+                <input id="proxThreshold" type="number" value="500" min="1" />
+              </div>
+              <div>
+                <label>AR model URL (.glb/.gltf)</label>
+                <input id="modelUrl" type="url" placeholder="test.glb" value="test.glb" />
+              </div>
+            </div>
+            <div class="small">Optional link (legacy behavior):</div>
+            <div class="row">
+              <div>
+                <label>Open mode</label>
+                <select id="openMode">
+                  <option value="new">New tab</option>
+                  <option value="same">Same tab</option>
+                </select>
+              </div>
+              <div>
+                <label>URL to open when within threshold</label>
+                <input id="proxUrl" type="url" placeholder="https://example.com" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="result" aria-live="polite">
+          <div>
+            <div class="small">Distance</div>
+            <strong id="outDist">–</strong>
+          </div>
+          <div>
+            <div class="small">Bearing A → B (initial)</div>
+            <strong id="outBear">–</strong>
+          </div>
+          <div>
+            <div class="small">Direction (A → B)</div>
+            <strong id="outDir">–</strong>
+          </div>
+        </div>
+
+        <div id="proxBanner" class="prox-banner">
+          <div><strong>You are within range.</strong> Pop-ups may be blocked. Click to proceed:</div>
+          <a id="proxBannerLink" href="#" target="_blank" rel="noopener">Open link</a>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      Built with the Web Geolocation API + A-Frame/AR.js. No external servers. Your coordinates stay on-device.
+    </footer>
+  </div>
+
+  <!-- --------------- AR SECTION (hidden until within threshold) --------------- -->
+  <div id="arSection" role="region" aria-label="AR View">
+    <div id="arTopBar">
+      <div class="panel">
+        <span id="arStatus">If you see black, tap Start (iOS needs a gesture).</span>
+        <button id="arStart">Start Camera</button>
+        <button id="arFlip">Flip Cam</button>
+        <button id="arSnap">📸 Take Photo</button>
+        <button id="arClose">Close AR</button>
+      </div>
+    </div>
+
+    <a-scene id="arScene" embedded vr-mode-ui="enabled: false"
+      renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
+      arjs="
+        sourceType: webcam;
+        facingMode: environment;
+        debugUIEnabled: false;
+        videoTexture: true;
+        trackingMethod: best;
+        sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
+      ">
+      <a-assets>
+        <!-- Will be swapped dynamically to #dynModel -->
+        <a-asset-item id="dynModel" src="test.glb"></a-asset-item>
+      </a-assets>
+
+      <!-- Lighting -->
+      <a-entity light="type: ambient; intensity: 0.8"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
+
+      <!-- Camera rig and model holder -->
+      <a-entity id="rig">
+        <a-entity id="cam" camera look-controls wasd-controls="enabled:false"></a-entity>
+        <!-- Holder will be positioned relative to camera based on heading vs bearing(B→A) -->
+        <a-entity id="holder" position="0 0 -2">
+          <a-entity id="modelEntity" gltf-model="#dynModel" shadow="cast: true; receive: true"></a-entity>
+        </a-entity>
+      </a-entity>
+    </a-scene>
+
+    <div class="arControls">
+      <div class="panel2">
+        <div class="arRow">
+          <button id="arReset" class="btn">Reset Pose</button>
+          <span id="headingReadout">Heading: —°</span>
+        </div>
+        <div class="arRow">
+          <div>
+            <label>Render Distance (m): <span id="arDistVal">2.0</span></label>
+            <input id="arDist" type="range" min="0.5" max="8" step="0.1" value="2">
+          </div>
+          <div>
+            <label>Height (m): <span id="arHeightVal">0.0</span></label>
+            <input id="arHeight" type="range" min="-1" max="2" step="0.05" value="0">
+          </div>
+        </div>
+        <div class="arRow">
+          <div>
+            <label>Rotate Y (° model spin): <span id="arRotYVal">0</span></label>
+            <input id="arRotY" type="range" min="-180" max="180" step="1" value="0">
+          </div>
+          <div>
+            <label>Scale: <span id="arScaleVal">1.0</span></label>
+            <input id="arScale" type="range" min="0.05" max="5" step="0.05" value="1">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // -------------------- Shared Utilities (from your first page) --------------------
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+    function fmtNum(n, digits=6) { return Number.isFinite(n) ? n.toFixed(digits).replace(/\.0+$/,'') : '–'; }
+    function tsFmt(ms) { if (!ms) return '–'; const d = new Date(ms); return d.toLocaleString(); }
+    function setStatus(text, mode='warn') {
+      const el = $('#geoStatus'); if (!el) return;
+      el.textContent = `Geolocation status: ${text}`;
+      el.classList.remove('ok','warn','err'); el.classList.add(mode);
+    }
+    function toRad(deg){ return deg * Math.PI / 180; }
+    function toDeg(rad){ return rad * 180 / Math.PI; }
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371_000; const φ1 = toRad(lat1), φ2 = toRad(lat2);
+      const Δφ = toRad(lat2 - lat1), Δλ = toRad(lon2 - lon1);
+      const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+    function initialBearing(lat1, lon1, lat2, lon2) {
+      const φ1 = toRad(lat1), φ2 = toRad(lat2), λ1 = toRad(lon1), λ2 = toRad(lon2);
+      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+    function convertDistance(meters, unit) {
+      switch(unit) { case 'km': return meters/1000; case 'mi': return meters/1609.344; case 'nm': return meters/1852; default: return meters; }
+    }
+    function bearingToCardinal(bearing) {
+      const dirs = ['North','North-East','East','South-East','South','South-West','West','North-West'];
+      return dirs[Math.round(bearing / 45) % 8];
+    }
+
+    // ------------------------------ Geolocation UI ------------------------------
+    let watchId = null;
+    function onPosSuccess(pos) {
+      const { latitude, longitude, accuracy } = pos.coords;
+      $('#lat').textContent = fmtNum(latitude, 6);
+      $('#lng').textContent = fmtNum(longitude, 6);
+      $('#acc').textContent = fmtNum(accuracy, 1);
+      $('#ts').textContent = tsFmt(pos.timestamp);
+      setStatus(watchId ? 'watching…' : 'position acquired', 'ok');
+      if (auto && autoFillTarget === 'B') fillCurrentInto('B'); // live fill if wanted
+    }
+    function onPosError(err) {
+      console.error(err);
+      const map = { 1: 'Permission denied', 2: 'Position unavailable', 3: 'Timeout' };
+      setStatus(`${map[err.code] || 'Unknown error'} — ${err.message}`, 'err');
+    }
+    const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+
+    $('#btnLocate').addEventListener('click', () => {
+      if (!('geolocation' in navigator)) return setStatus('Geolocation not supported', 'err');
+      setStatus('requesting location…'); navigator.geolocation.getCurrentPosition(onPosSuccess, onPosError, geoOpts);
+    });
+    $('#btnWatch').addEventListener('click', () => {
+      if (!('geolocation' in navigator)) return setStatus('Geolocation not supported', 'err');
+      if (watchId !== null) return;
+      setStatus('starting watch…'); watchId = navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
+      $('#btnStop').disabled = false;
+    });
+    $('#btnStop').addEventListener('click', () => {
+      if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; setStatus('watch stopped'); }
+      $('#btnStop').disabled = true;
+    });
+    if ('Notification' in window && Notification.permission === 'default') { Notification.requestPermission(); }
+
+    function readInputs() {
+      const aLat = parseFloat($('#aLat').value);
+      const aLng = parseFloat($('#aLng').value);
+      const bLat = parseFloat($('#bLat').value);
+      const bLng = parseFloat($('#bLng').value);
+      if ([aLat,aLng,bLat,bLng].some(v => !Number.isFinite(v))) return null;
+      return { aLat, aLng, bLat, bLng };
+    }
+    function updateOutputs(dMeters, bearingAB) {
+      const unit = $('#units').value;
+      const converted = convertDistance(dMeters, unit);
+      $('#outDist').textContent = `${fmtNum(converted, unit==='m'?0:3)} ${unit}`;
+      $('#outBear').textContent = `${fmtNum(bearingAB, 1)}°`;
+      $('#outDir').textContent = `${bearingToCardinal(bearingAB)} (${fmtNum(bearingAB,1)}°)`;
+    }
+
+    const banner = $('#proxBanner'); const bannerLink = $('#proxBannerLink');
+    function showProxBanner(url) { banner.style.display = 'block'; bannerLink.href = url; bannerLink.target = $('#openMode').value === 'new' ? '_blank' : '_self'; }
+    function hideProxBanner() { banner.style.display = 'none'; }
+
+    let auto = false; let autoFillTarget = 'B'; let alertShown = false; let linkOpened = false;
+    function fillCurrentInto(target) {
+      const lat = parseFloat($('#lat').textContent);
+      const lng = parseFloat($('#lng').textContent);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return setStatus('Get your current location first', 'warn');
+      if (target === 'A') { $('#aLat').value = lat; $('#aLng').value = lng; }
+      if (target === 'B') { $('#bLat').value = lat; $('#bLng').value = lng; }
+      updateDistance(false);
+    }
+    $('#useCurrentForA').addEventListener('click', () => fillCurrentInto('A'));
+    $('#useCurrentForB').addEventListener('click', () => fillCurrentInto('B'));
+
+    (function showHints(){
+      const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!isHttps) setStatus('Site must be HTTPS or localhost for precise location', 'warn'); else setStatus('ready', 'ok');
+    })();
+
+    // ---------------------------- AR Control Plumbing ----------------------------
+    const arSection = $('#arSection');
+    const arScene = $('#arScene');
+    const holder = $('#holder');
+    const modelEl = $('#modelEntity');
+    const arStatus = $('#arStatus');
+    const arStart = $('#arStart');
+    const arFlip = $('#arFlip');
+    const arClose = $('#arClose');
+    const arSnap = $('#arSnap');
+
+    // dynamic model URL from the form
+    function ensureModelUrl() {
+      const url = ($('#modelUrl').value || '').trim() || 'test.glb';
+      const asset = $('#dynModel');
+      if (asset.getAttribute('src') !== url) {
+        asset.setAttribute('src', url);
+        // Force model reload
+        modelEl.setAttribute('gltf-model', '#dynModel');
+      }
+    }
+
+    function setARStatus(msg){ arStatus.textContent = msg; }
+
+    async function startAR(){
+      try{
+        const sys = arScene.systems && arScene.systems['arjs'];
+        if (sys && sys.arSource && sys.arSource.ready === false) {
+          await sys.arSource.start();
+        }
+        setARStatus('Camera started');
+      }catch(e){ setARStatus('Start failed: ' + e.message); }
+    }
+    let usingFront = false;
+    async function flipCamera(){
+      const sys = arScene.systems && arScene.systems['arjs'];
+      if (!sys || !sys.arSource) return;
+      try {
+        usingFront = !usingFront;
+        await sys.arSource.stop();
+        sys.arSource.parameters.facingMode = usingFront ? 'user' : 'environment';
+        await sys.arSource.start();
+        setARStatus('Camera: ' + (usingFront ? 'front' : 'rear'));
+      } catch (e) { setARStatus('Flip failed: ' + e.message); }
+    }
+    document.addEventListener('visibilitychange', () => {
+      const sys = arScene.systems && arScene.systems['arjs'];
+      if (!sys || !sys.arSource) return;
+      if (!document.hidden) {
+        const video = sys.arSource.domElement;
+        if (video && (video.paused || video.readyState < 2)) {
+          sys.arSource.start().then(()=> setARStatus('Resumed after tab switch'));
+        }
+      }
+    });
+    arStart.addEventListener('click', async () => {
+      // iOS 13+ requires explicit permission request for orientation
+      await requestHeadingPermission();
+      await startAR();
+    });
+    arFlip.addEventListener('click', flipCamera);
+    arClose.addEventListener('click', () => { arSection.style.display = 'none'; });
+    arSnap.addEventListener('click', ()=>{
+      const renderer = arScene.renderer; if (!renderer) return alert('Renderer not ready.');
+      renderer.preserveDrawingBuffer = true;
+      const dataURL = renderer.domElement.toDataURL('image/png');
+      const a = document.createElement('a'); a.href = dataURL; a.download = 'ar-photo.png'; a.click();
+      renderer.preserveDrawingBuffer = false;
+    });
+
+    // AR tweak controls
+    const arDist = $('#arDist'), arHeight = $('#arHeight'), arRotY = $('#arRotY'), arScale = $('#arScale');
+    const arDistVal = $('#arDistVal'), arHeightVal = $('#arHeightVal'), arRotYVal = $('#arRotYVal'), arScaleVal = $('#arScaleVal');
+    function updateARTransforms(){
+      // Holder XYZ set by heading/bearing (x,z). Height controlled here.
+      holder.object3D.position.y = parseFloat(arHeight.value);
+      arHeightVal.textContent = parseFloat(arHeight.value).toFixed(2);
+
+      const y = parseFloat(arRotY.value);
+      arRotYVal.textContent = y.toFixed(0);
+      modelEl.object3D.rotation.set(0, THREE.MathUtils.degToRad(y), 0);
+
+      const s = parseFloat(arScale.value);
+      arScaleVal.textContent = s.toFixed(2);
+      modelEl.object3D.scale.set(s, s, s);
+
+      arDistVal.textContent = parseFloat(arDist.value).toFixed(1);
+      // x/z are recalculated continuously from heading + bearing (see animate loop)
+    }
+    [arDist, arHeight, arRotY, arScale].forEach(i => i.addEventListener('input', updateARTransforms));
+    $('#arReset').addEventListener('click', ()=>{ arDist.value=2; arHeight.value=0; arRotY.value=0; arScale.value=1; updateARTransforms(); });
+    updateARTransforms();
+
+    // ---------------- Heading (compass) handling ----------------
+    let deviceHeading = null; // 0..360 (0 = North)
+    const headingReadout = $('#headingReadout');
+
+    async function requestHeadingPermission(){
+      try {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const res = await DeviceOrientationEvent.requestPermission();
+          // 'granted' or 'denied'
+        }
+      } catch(e) { /* ignore */ }
+    }
+
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+    window.addEventListener('deviceorientation', onOrientation, true);
+    function onOrientation(e){
+      let headingDeg = null;
+      if (e.absolute && typeof e.alpha === 'number') {
+        // alpha typically relative to true north in 'absolute' events
+        headingDeg = 360 - e.alpha; // convert to compass (0=N, clockwise)
+      } else if (typeof e.webkitCompassHeading === 'number') {
+        headingDeg = e.webkitCompassHeading; // iOS
+      } else if (typeof e.alpha === 'number') {
+        // Fallback (not true-north aligned): still usable for relative direction
+        headingDeg = 360 - e.alpha;
+      }
+      if (headingDeg != null) {
+        headingDeg = (headingDeg + 360) % 360;
+        deviceHeading = headingDeg;
+        headingReadout.textContent = `Heading: ${headingDeg.toFixed(0)}°`;
+      }
+    }
+
+    // ---------------- Distance + AR coupling ----------------
+    let lastBearingBA = null; // Bearing from B -> A (what you asked)
+    function updateDistance(isUserGesture=false) {
+      const vals = readInputs();
+      if (!vals) {
+        $('#outDist').textContent = '–';
+        $('#outBear').textContent = '–';
+        $('#outDir').textContent = '–';
+        hideProxBanner();
+        return;
+      }
+
+      const dMeters = haversine(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
+      const bearingAB = initialBearing(vals.aLat, vals.aLng, vals.bLat, vals.bLng);
+      const bearingBA = initialBearing(vals.bLat, vals.bLng, vals.aLat, vals.aLng); // <-- direction from B to A
+      lastBearingBA = bearingBA;
+      updateOutputs(dMeters, bearingAB);
+
+      const threshold = Math.max(1, parseFloat($('#proxThreshold').value) || 500);
+      const url = ($('#proxUrl').value || '').trim();
+      const openMode = $('#openMode').value;
+
+      // Nice 50m ping
+      if (dMeters < 50) {
+        if (!alertShown) {
+          alertShown = true;
+          $('#outDist').style.color = 'var(--accent)';
+          $('#outDist').animate([{transform:'scale(1.1)'},{transform:'scale(1)'}], {duration:600, iterations:3});
+          if ('Notification' in window && Notification.permission === 'granted') new Notification('You are within 50 meters of your target!');
+        }
+      } else { alertShown = false; $('#outDist').style.color = 'inherit'; }
+
+      // Show AR overlay when within threshold
+      if (dMeters < threshold) {
+        ensureModelUrl();
+        arSection.style.display = 'block';
+      } else if (dMeters > threshold + 20) {
+        arSection.style.display = 'none';
+      }
+
+      // Legacy optional link behavior
+      if (url && dMeters < threshold) {
+        if (!linkOpened) {
+          linkOpened = true; hideProxBanner();
+          if (isUserGesture) {
+            try { (openMode === 'new') ? window.open(url, '_blank', 'noopener') : (window.location.href = url); }
+            catch(e){ showProxBanner(url); }
+          } else showProxBanner(url);
+        }
+      } else if (dMeters > threshold + 20) { linkOpened = false; hideProxBanner(); }
+    }
+
+    $('#btnCalc').addEventListener('click', () => updateDistance(true));
+    $('#units').addEventListener('change', () => updateDistance(false));
+    $('#proxThreshold').addEventListener('input', () => { if (auto) updateDistance(false); });
+    $('#proxUrl').addEventListener('input',   () => { if (auto) updateDistance(false); });
+    $('#openMode').addEventListener('change', () => { if (auto) updateDistance(false); });
+    $('#modelUrl').addEventListener('change', ensureModelUrl);
+
+    $('#btnAuto').addEventListener('click', () => {
+      auto = !auto;
+      $('#btnAuto').textContent = auto ? 'Auto-update: ON' : 'Toggle auto-update';
+      if (auto) updateDistance(false);
+    });
+    ['#aLat','#aLng','#bLat','#bLng'].forEach(sel => {
+      $(sel).addEventListener('input', () => { if (auto) updateDistance(false); });
+    });
+
+    // ---------------- Place object based on (bearing B->A) vs current heading ----------------
+    // We place the holder at distance R in the direction delta = bearingBA - heading, in camera space:
+    // x = R * sin(delta), z = -R * cos(delta)
+    function placeObjectByHeading(){
+      const R = parseFloat(arDist.value) || 2;
+      const bearing = (lastBearingBA == null) ? null : (lastBearingBA % 360);
+      const heading = (deviceHeading != null) ? (deviceHeading % 360) : null;
+
+      if (bearing == null) return; // need computed bearing first (run distance calc)
+
+      // If no heading yet, default to placing it in front (delta=0)
+      const deltaDeg = (heading == null) ? 0 : ((bearing - heading + 540) % 360) - 180; // normalize to [-180,180]
+      const deltaRad = toRad(deltaDeg);
+
+      // Update X/Z every frame to keep alignment as you turn
+      holder.object3D.position.x = R * Math.sin(deltaRad);
+      holder.object3D.position.z = -R * Math.cos(deltaRad);
+    }
+
+    // Animate loop to keep the object aligned as you rotate the phone
+    function animate(){
+      placeObjectByHeading();
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // -------------- Initial AR status hint --------------
+    if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+      setARStatus('Use HTTPS or localhost for camera access');
+    } else {
+      setARStatus('If you see black, tap Start (iOS requires a gesture)');
+    }
+  </script>
+</body>
+</html>
+
