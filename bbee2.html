@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>AR Photo with glTF — Gyro-Anchored (A-Frame + AR.js)</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #000; }
+    .overlay { position: fixed; inset: env(safe-area-inset-top) 0 auto 0; display: flex; justify-content: center; padding: 12px; z-index: 10; pointer-events: none; }
+    .panel { pointer-events: auto; background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px; border-radius: 10px; font-family: system-ui, sans-serif; font-size: 14px; display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px); }
+    .panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+    .panel a { color: #6ee7ff; }
+    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+
+    .ui { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 12px; display: grid; gap: 8px; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 20%); z-index: 10; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .btn { appearance: none; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); color: #fff; padding: 10px 12px; border-radius: 10px; font: 600 14px/1.2 system-ui, sans-serif; cursor: pointer; }
+    .btn:active { transform: translateY(1px); }
+    .panel2 { display: grid; gap: 6px; padding: 10px; border-radius: 12px; background: rgba(0,0,0,.45); backdrop-filter: blur(6px); color: #fff; font-family: system-ui, sans-serif; }
+    label { font-size: 12px; color: #dbeafe; }
+    input[type=range] { width: 100%; }
+    .mode { font-size: 12px; opacity: .85; }
+  </style>
+
+  <!-- Stable combo -->
+  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+</head>
+<body>
+  <div class="overlay">
+    <div class="panel" id="ui">
+      <span id="status">If you see black, tap Start (iOS needs a gesture).</span>
+      <button id="start">Start camera</button>
+      <button id="flip">Flip cam</button>
+      <button id="btnPlace">📍 Place</button>
+      <button id="btnFollow">🎯 Follow</button>
+      <button id="btnSnap">📸 Take Photo</button>
+    </div>
+  </div>
+
+  <a-scene id="scene" embedded vr-mode-ui="enabled: false"
+           renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
+           arjs="
+             sourceType: webcam;
+             facingMode: environment;
+             debugUIEnabled: false;
+             videoTexture: true;
+             trackingMethod: best;
+             sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
+           "
+  >
+    <a-assets>
+      <!-- Replace with your GLB/GLTF URL. Prefer .glb with embedded textures. -->
+      <a-asset-item id="model" src="test.glb"></a-asset-item>
+    </a-assets>
+
+    <!-- Lighting -->
+    <a-entity light="type: ambient; intensity: 0.8"></a-entity>
+    <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
+
+    <!-- Camera (device orientation drives rotation) -->
+    <a-entity id="camera" camera look-controls="touchEnabled: true; mouseEnabled: false" wasd-controls="enabled:false"></a-entity>
+
+    <!-- FOLLOW holder (relative to camera, stays in front) -->
+    <a-entity id="holderFollow" position="0 0 -2">
+      <a-entity id="modelFollow" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+    </a-entity>
+
+    <!-- ANCHOR holder (world-locked using gyro — counter-rotates because camera rotates) -->
+    <a-entity id="holderAnchor" visible="false">
+      <a-entity id="modelAnchor" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+    </a-entity>
+
+  </a-scene>
+
+  <div class="ui">
+    <div class="panel2">
+      <div class="row">
+        <button id="btnReset" class="btn">Reset Pose</button>
+        <div class="mode">Mode: <span id="mode">FOLLOW</span></div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Distance (m): <span id="distVal">2.0</span></label>
+          <input id="dist" type="range" min="0.5" max="6" step="0.1" value="2">
+        </div>
+        <div>
+          <label>Height (m): <span id="heightVal">0.0</span></label>
+          <input id="height" type="range" min="-1" max="2" step="0.05" value="0">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Rotate Y (°): <span id="rotYVal">0</span></label>
+          <input id="rotY" type="range" min="-180" max="180" step="1" value="0">
+        </div>
+        <div>
+          <label>Scale: <span id="scaleVal">1.0</span></label>
+          <input id="scale" type="range" min="0.05" max="5" step="0.05" value="1">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sceneEl = document.getElementById('scene');
+    const camEl = document.getElementById('camera');
+
+    const holderFollow = document.getElementById('holderFollow');
+    const modelFollow  = document.getElementById('modelFollow');
+
+    const holderAnchor = document.getElementById('holderAnchor');
+    const modelAnchor  = document.getElementById('modelAnchor');
+
+    const statusEl = document.getElementById('status');
+    const modeEl   = document.getElementById('mode');
+
+    const startBtn = document.getElementById('start');
+    const flipBtn  = document.getElementById('flip');
+    const placeBtn = document.getElementById('btnPlace');
+    const followBtn= document.getElementById('btnFollow');
+    const snapBtn  = document.getElementById('btnSnap');
+
+    function setStatus(msg){ statusEl.textContent = msg; }
+
+    // --- CAMERA START / FLIP -------------------------------------------------
+    async function startAR(){
+      try{
+        const sys = sceneEl.systems && sceneEl.systems['arjs'];
+        if (sys && sys.arSource && sys.arSource.ready === false) {
+          await sys.arSource.start();
+        }
+        // iOS deviceorientation permission (best effort)
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          try { await DeviceOrientationEvent.requestPermission(); } catch(_){}
+        }
+        setStatus('Camera started');
+      }catch(e){ setStatus('Start failed: ' + e.message); }
+    }
+
+    let usingFront = false;
+    async function flipCamera(){
+      const sys = sceneEl.systems && sceneEl.systems['arjs'];
+      if (!sys || !sys.arSource) return;
+      try {
+        usingFront = !usingFront;
+        await sys.arSource.stop();
+        sys.arSource.parameters.facingMode = usingFront ? 'user' : 'environment';
+        await sys.arSource.start();
+        setStatus('Camera: ' + (usingFront ? 'front' : 'rear'));
+      } catch (e) { setStatus('Flip failed: ' + e.message); }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      const sys = sceneEl.systems && sceneEl.systems['arjs'];
+      if (!sys || !sys.arSource) return;
+      if (!document.hidden) {
+        const video = sys.arSource.domElement;
+        if (video && (video.paused || video.readyState < 2)) {
+          sys.arSource.start().then(()=> setStatus('Resumed after tab switch'));
+        }
+      }
+    });
+
+    startBtn.addEventListener('click', startAR);
+    flipBtn.addEventListener('click', flipCamera);
+
+    // --- SLIDERS -------------------------------------------------------------
+    const dist   = document.getElementById('dist');
+    const height = document.getElementById('height');
+    const rotY   = document.getElementById('rotY');
+    const scale  = document.getElementById('scale');
+
+    const distVal   = document.getElementById('distVal');
+    const heightVal = document.getElementById('heightVal');
+    const rotYVal   = document.getElementById('rotYVal');
+    const scaleVal  = document.getElementById('scaleVal');
+
+    const updateModelXforms = (targetEntity)=>{
+      targetEntity.object3D.position.set(0, parseFloat(height.value), 0);
+      if (targetEntity === modelFollow) {
+        // In FOLLOW mode, distance is handled by holder position (at -dist in front of camera)
+      }
+      const y = parseFloat(rotY.value);
+      rotYVal.textContent = y.toFixed(0);
+      targetEntity.object3D.rotation.set(0, THREE.MathUtils.degToRad(y), 0);
+      const s = parseFloat(scale.value);
+      scaleVal.textContent = s.toFixed(2);
+      targetEntity.object3D.scale.set(s, s, s);
+    };
+
+    function updateUIValues(){
+      distVal.textContent = parseFloat(dist.value).toFixed(1);
+      heightVal.textContent = parseFloat(height.value).toFixed(2);
+    }
+
+    [dist, height, rotY, scale].forEach(i => i.addEventListener('input', ()=>{
+      updateUIValues();
+      updateModelXforms(modelFollow);
+      updateModelXforms(modelAnchor);
+      if (currentMode === 'FOLLOW') placeFollowDistance();
+    }));
+
+    updateUIValues();
+
+    // Keep the FOLLOW holder always in front of camera at chosen distance
+    function placeFollowDistance(){
+      holderFollow.object3D.position.set(0, 0, -parseFloat(dist.value));
+    }
+    placeFollowDistance();
+
+    document.getElementById('btnReset').addEventListener('click', ()=>{
+      dist.value = 2; height.value = 0; rotY.value = 0; scale.value = 1; updateUIValues();
+      updateModelXforms(modelFollow); updateModelXforms(modelAnchor);
+      placeFollowDistance();
+    });
+
+    // --- FOLLOW vs ANCHOR (Gyro world-lock) ---------------------------------
+    let currentMode = 'FOLLOW';
+    function setMode(m){
+      currentMode = m;
+      modeEl.textContent = m;
+      const follow = (m === 'FOLLOW');
+      holderFollow.setAttribute('visible', follow);
+      holderAnchor.setAttribute('visible', !follow);
+    }
+    setMode('FOLLOW');
+
+    function worldLockPlace(){
+      // Compute a point in front of camera at selected distance, then detach and freeze there.
+      const distVal = parseFloat(dist.value);
+      const camObj = camEl.object3D;
+      camObj.updateMatrixWorld();
+      const camPos = new THREE.Vector3();
+      const camQuat= new THREE.Quaternion();
+      const camScale = new THREE.Vector3();
+      camObj.matrixWorld.decompose(camPos, camQuat, camScale);
+
+      const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
+      const targetPos = camPos.clone().add(forward.multiplyScalar(distVal));
+
+      // Place anchor at target position; optionally keep same yaw the user set
+      holderAnchor.object3D.position.copy(targetPos);
+
+      // Keep the anchor level with horizon (no roll/pitch) for nicer look
+      const euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+      holderAnchor.object3D.rotation.set(0, euler.y, 0);
+
+      setMode('ANCHOR');
+    }
+
+    placeBtn.addEventListener('click', ()=>{
+      worldLockPlace();
+      updateModelXforms(modelAnchor);
+    });
+
+    followBtn.addEventListener('click', ()=>{
+      setMode('FOLLOW');
+      updateModelXforms(modelFollow);
+      placeFollowDistance();
+    });
+
+    // Initialize transforms
+    updateModelXforms(modelFollow);
+    updateModelXforms(modelAnchor);
+
+    // --- SNAPSHOT ------------------------------------------------------------
+    snapBtn.addEventListener('click', ()=>{
+      const renderer = sceneEl.renderer; if (!renderer) return alert('Renderer not ready.');
+      renderer.preserveDrawingBuffer = true;
+      const dataURL = renderer.domElement.toDataURL('image/png');
+      const a = document.createElement('a'); a.href = dataURL; a.download = 'ar-photo.png'; a.click();
+      renderer.preserveDrawingBuffer = false;
+    });
+
+    // --- HINTS ---------------------------------------------------------------
+    if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+      setStatus('Use HTTPS or localhost for camera access');
+    } else {
+      setStatus('If you see black, tap Start (iOS requires a gesture)');
+    }
+  </script>
+</body>
+</html>
+
