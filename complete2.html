@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        <title>AR glTF + North-Locked Object</title>
+        <style>
+html, body { height: 100%; margin: 0; background: #000; }
+a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+.overlay { position: fixed; inset: env(safe-area-inset-top) 0 auto 0; display: flex; justify-content: center; padding: 12px; z-index: 10; pointer-events: none; }
+.panel { pointer-events: auto; background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px; border-radius: 10px; font-family: system-ui, sans-serif; font-size: 14px; display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px); }
+.panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+.panel .pill { border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 4px 10px; background: rgba(255,255,255,.08); }
+.panel a { color: #6ee7ff; }
+.muted { opacity: .8 }
+.ok { color: #22c55e }
+.warn { color: #f59e0b }
+.err { color: #ef4444 }
+        </style>
+
+        <!-- Stable combo -->
+        <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+    </head>
+    <body>
+        <div class="overlay">
+            <div class="panel" id="ui">
+                <span id="status" class="muted">If you see black, tap Start (iOS needs a gesture).</span>
+                <button id="start">Start</button>
+                <button id="flip">Flip</button>
+                <button id="btnFollow">🎯 Follow</button>
+                <button id="btnPlace">📍 Place</button>
+                <button id="btnNorth">🧭 North</button>
+                <button id="btnSnap">📸 Photo</button>
+                <span class="pill" id="modePill">Mode: FOLLOW</span>
+                <span class="pill" id="compassPill">Heading: —°</span>
+            </div>
+        </div>
+
+        <a-scene id="scene" embedded vr-mode-ui="enabled: false"
+            renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
+            arjs="
+            sourceType: webcam;
+            facingMode: environment;
+            debugUIEnabled: false;
+            videoTexture: true;
+            trackingMethod: best;
+            sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
+            ">
+            <a-assets>
+                <!-- Replace with your GLB/GLTF (GLB recommended for embedded textures) -->
+                <a-asset-item id="model" src="test.glb"></a-asset-item>
+            </a-assets>
+
+            <!-- Lights -->
+            <a-entity light="type: ambient; intensity: 0.8"></a-entity>
+            <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
+
+            <!-- Camera (gyro drives rotation) -->
+            <a-entity id="camera" camera look-controls="touchEnabled: true; mouseEnabled: false" wasd-controls="enabled:false"></a-entity>
+
+            <!-- FOLLOW: a fixed distance in front of the camera -->
+            <a-entity id="holderFollow" position="0 0 -6">
+                <a-entity id="modelFollow" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
+
+            <!-- ANCHOR (manual place): world-locked where you click Place -->
+            <a-entity id="holderAnchor" visible="false">
+                <a-entity id="modelAnchor" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
+
+            <!-- NORTH: always due magnetic north from the user at a fixed distance -->
+            <a-entity id="holderNorth" visible="false" north-lock="dist: 6; height: 0">
+                <a-entity id="modelNorth" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
+        </a-scene>
+
+        <script>
+            // ---------- Fixed transforms / constants ----------
+            const FIXED_DIST   = 6.0;   // meters
+            const FIXED_SCALE  = 0.05;  // 5% of original size
+            const FIXED_HEIGHT = 0.0;   // meters (Y)
+            const FIXED_ROT_Y  = 0.0;   // degrees
+
+            const sceneEl     = document.getElementById('scene');
+            const camEl       = document.getElementById('camera');
+
+            const holderFollow= document.getElementById('holderFollow');
+            const modelFollow = document.getElementById('modelFollow');
+
+            const holderAnchor= document.getElementById('holderAnchor');
+            const modelAnchor = document.getElementById('modelAnchor');
+
+            const holderNorth = document.getElementById('holderNorth');
+            const modelNorth  = document.getElementById('modelNorth');
+
+            const statusEl    = document.getElementById('status');
+            const modePill    = document.getElementById('modePill');
+            const compassPill = document.getElementById('compassPill');
+
+            const startBtn = document.getElementById('start');
+            const flipBtn  = document.getElementById('flip');
+            const placeBtn = document.getElementById('btnPlace');
+            const followBtn= document.getElementById('btnFollow');
+            const northBtn = document.getElementById('btnNorth');
+            const snapBtn  = document.getElementById('btnSnap');
+
+            function setStatus(msg, cls='') {
+                statusEl.classList.remove('ok','warn','err');
+                if (cls) statusEl.classList.add(cls);
+                statusEl.textContent = msg;
+            }
+
+            // ---------- Utilities ----------
+            function applyFixedXforms(targetEntity){
+                targetEntity.object3D.position.set(0, FIXED_HEIGHT, 0);
+                targetEntity.object3D.rotation.set(0, THREE.MathUtils.degToRad(FIXED_ROT_Y), 0);
+                targetEntity.object3D.scale.set(FIXED_SCALE, FIXED_SCALE, FIXED_SCALE);
+            }
+            function placeFollowDistance(){ holderFollow.object3D.position.set(0, 0, -FIXED_DIST); }
+
+            // Initial setup
+            placeFollowDistance();
+            [modelFollow, modelAnchor, modelNorth].forEach(applyFixedXforms);
+
+            // ---------- Camera start / flip ----------
+            async function startAR(){
+                try {
+                    const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                    if (sys && sys.arSource && sys.arSource.ready === false) {
+                        await sys.arSource.start();
+                    }
+                    // iOS motion permission (needed for compass + smoother gyro)
+                    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        try { await DeviceOrientationEvent.requestPermission(); } catch(_){}
+                    }
+                    setStatus('Camera started', 'ok');
+                } catch(e){ setStatus('Start failed: ' + e.message, 'err'); }
+            }
+
+            let usingFront = false;
+            async function flipCamera(){
+                const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                if (!sys || !sys.arSource) return;
+                try {
+                    usingFront = !usingFront;
+                    await sys.arSource.stop();
+                    sys.arSource.parameters.facingMode = usingFront ? 'user' : 'environment';
+                    await sys.arSource.start();
+                    setStatus('Camera: ' + (usingFront ? 'front' : 'rear'), 'ok');
+                } catch (e) { setStatus('Flip failed: ' + e.message, 'err'); }
+            }
+
+            document.addEventListener('visibilitychange', () => {
+                const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                if (!sys || !sys.arSource) return;
+                if (!document.hidden) {
+                    const video = sys.arSource.domElement;
+                    if (video && (video.paused || video.readyState < 2)) {
+                        sys.arSource.start().then(()=> setStatus('Resumed after tab switch','ok'));
+                    }
+                }
+            });
+
+            startBtn.addEventListener('click', startAR);
+            flipBtn.addEventListener('click', flipCamera);
+
+            // ---------- Modes: FOLLOW / PLACE / NORTH ----------
+            let currentMode = 'FOLLOW';
+            function setMode(m){
+                currentMode = m;
+                modePill.textContent = `Mode: ${m}`;
+                const isFollow = m === 'FOLLOW';
+                const isAnchor = m === 'ANCHOR';
+                const isNorth  = m === 'NORTH';
+                holderFollow.setAttribute('visible', isFollow);
+                holderAnchor.setAttribute('visible', isAnchor);
+                holderNorth.setAttribute('visible',  isNorth);
+                if (isFollow) placeFollowDistance();
+            }
+            setMode('FOLLOW');
+
+            function worldLockPlace(){
+                // Place an object 6 m ahead of camera (at the moment you tap)
+                const camObj = camEl.object3D;
+                camObj.updateMatrixWorld();
+
+                const camPos   = new THREE.Vector3();
+                const camQuat  = new THREE.Quaternion();
+                const camScale = new THREE.Vector3();
+                camObj.matrixWorld.decompose(camPos, camQuat, camScale);
+
+                const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
+                const targetPos = camPos.clone().add(forward.multiplyScalar(FIXED_DIST));
+
+                holderAnchor.object3D.position.copy(targetPos);
+
+                // Keep yaw only (level to horizon); object faces the same yaw as camera at placement time
+                const euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+                holderAnchor.object3D.rotation.set(0, euler.y, 0);
+
+                setMode('ANCHOR');
+                applyFixedXforms(modelAnchor);
+            }
+
+            placeBtn.addEventListener('click', worldLockPlace);
+            followBtn.addEventListener('click', () => {
+                setMode('FOLLOW');
+                applyFixedXforms(modelFollow);
+                placeFollowDistance();
+            });
+            northBtn.addEventListener('click', () => {
+                setMode('NORTH');
+                applyFixedXforms(modelNorth);
+            });
+
+            // ---------- NORTH LOCK COMPONENT ----------
+            // Keeps its entity at a fixed distance due magnetic north from the user's current position.
+                // NOTE: This uses the A-Frame world -Z axis as "magnetic north", which aligns with real north
+            // via the device orientation pipeline. No compass math is required for positioning.
+                AFRAME.registerComponent('north-lock', {
+                    schema: { dist: {default: 6}, height: {default: 0} },
+                    init() {
+                        this.cam = document.getElementById('camera');
+                        this.tmpPos = new THREE.Vector3();
+                        this.north = new THREE.Vector3(0,0,-1); // world -Z treated as North
+                    },
+                    tick() {
+                        if (!this.cam) return;
+                        const obj = this.el.object3D;
+                        const camObj = this.cam.object3D;
+                        camObj.updateMatrixWorld();
+
+                        // Get camera world position
+                        camObj.getWorldPosition(this.tmpPos);
+
+                        // Position = camera position + north vector * dist
+                        obj.position.copy(this.tmpPos).addScaledVector(this.north, this.data.dist);
+
+                        // Optional: keep yaw facing south (toward the user) so front of model looks at camera horizontally
+                        const camYaw = new THREE.Euler().setFromQuaternion(camObj.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+                        obj.rotation.set(0, camYaw + Math.PI, 0);
+
+                        // Height offset
+                        obj.position.y += this.data.height;
+                    }
+                });
+
+            // ---------- Compass (UI only) ----------
+            (function compassUI(){
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+                function screenAngle() {
+                    if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+                    if (typeof window.orientation === 'number') return (window.orientation + 360) % 360;
+                    return 0;
+                }
+                function normalize(d){ d = d % 360; return d < 0 ? d + 360 : d; }
+
+                let ema = null;
+                const SMOOTH = 0.15;
+                function smooth(value){
+                    if (value == null) return ema;
+                    if (ema == null) { ema = value; return value; }
+                    const delta = (((value - ema) + 540) % 360) - 180;
+                    ema = (ema + SMOOTH * delta + 360) % 360;
+                    return ema;
+                }
+
+                function computeHeading(e){
+                    if (typeof e.webkitCompassHeading === 'number') {
+                        return normalize(e.webkitCompassHeading); // iOS Safari
+                    }
+                    if (typeof e.alpha === 'number') {
+                        let hdg = 360 - e.alpha; // Android alpha -> clockwise from north
+                        hdg = normalize(hdg + screenAngle());
+                        return hdg;
+                    }
+                    return null;
+                }
+
+                function update(h){
+                    const s = smooth(h);
+                    if (typeof s === 'number') {
+                        compassPill.textContent = `Heading: ${Math.round(s)}°`;
+                    }
+                }
+
+                function onOrientation(e){
+                    const h = computeHeading(e);
+                    if (typeof h === 'number' && !Number.isNaN(h)) update(h);
+                }
+
+                async function ensurePermission(){
+                    if (!isIOS) return true;
+                    const fn = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission;
+                    if (typeof fn === 'function') {
+                        try {
+                            const state = await DeviceOrientationEvent.requestPermission();
+                            return state === 'granted';
+                        } catch { return false; }
+                    }
+                    return true;
+                }
+
+                // Start listening automatically on Android; iOS after Start tap
+                if (!isIOS) {
+                    window.addEventListener('deviceorientation', onOrientation, { passive: true });
+                    setStatus('Compass listening…', 'ok');
+                } else {
+                    startBtn.addEventListener('click', async () => {
+                        if (await ensurePermission()) {
+                            window.addEventListener('deviceorientation', onOrientation, { passive: true });
+                            setStatus('Compass listening…', 'ok');
+                        } else {
+                            setStatus('Motion permission denied (iOS)', 'err');
+                        }
+                    });
+                }
+
+                (screen.orientation || window).addEventListener?.('change', () => { ema = null; });
+            })();
+
+            // ---------- Snapshot ----------
+            snapBtn.addEventListener('click', ()=>{
+                const renderer = sceneEl.renderer; if (!renderer) return alert('Renderer not ready.');
+                renderer.preserveDrawingBuffer = true;
+                const dataURL = renderer.domElement.toDataURL('image/png');
+                const a = document.createElement('a'); a.href = dataURL; a.download = 'ar-photo.png'; a.click();
+                renderer.preserveDrawingBuffer = false;
+            });
+
+            // ---------- HTTPS hint ----------
+            if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+                setStatus('Use HTTPS or localhost for camera & sensors', 'warn');
+            } else {
+                setStatus('Ready. Tap Start (iOS requires a gesture).', 'ok');
+            }
+        </script>
+    </body>
+</html>
+
