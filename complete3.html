@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        <title>AR glTF + Target Bearing (GPS)</title>
+        <style>
+html, body { height: 100%; margin: 0; background: #000; }
+a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+.overlay { position: fixed; inset: env(safe-area-inset-top) 0 auto 0; display: flex; justify-content: center; padding: 12px; z-index: 10; pointer-events: none; }
+.panel { pointer-events: auto; background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px; border-radius: 10px; font-family: system-ui, sans-serif; font-size: 14px; display: grid; grid-auto-flow: column; gap: 8px; align-items: center; backdrop-filter: blur(6px); }
+.panel button, .panel input {
+    appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px;
+    background: rgba(255,255,255,.08); color: #fff;
+}
+  .pill { border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 4px 10px; background: rgba(255,255,255,.08); }
+  .muted { opacity: .85 }
+  .ok { color: #22c55e }
+  .warn { color: #f59e0b }
+  .err { color: #ef4444 }
+  .stack { display: grid; grid-auto-flow: row; gap: 6px; }
+  .row { display: grid; grid-auto-flow: column; gap: 6px; align-items: center; }
+  .w-24 { width: 110px; }
+  .w-18 { width: 80px; }
+        </style>
+
+        <!-- A-Frame + AR.js -->
+        <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+    </head>
+    <body>
+        <div class="overlay">
+            <div class="panel" id="ui">
+                <span id="status" class="muted">HTTPS recommended. Tap Start on iOS.</span>
+                <button id="start">Start</button>
+                <button id="flip">Flip</button>
+                <button id="btnFollow">🎯 Follow</button>
+                <button id="btnPlace">📍 Place</button>
+                <button id="btnNorth">🧭 North</button>
+                <button id="btnTarget">📌 Target</button>
+                <button id="btnSnap">📸 Photo</button>
+                <span class="pill" id="modePill">Mode: FOLLOW</span>
+                <span class="pill" id="compassPill">Heading: —°</span>
+                <span class="pill" id="gpsPill">GPS: —</span>
+            </div>
+        </div>
+
+        <!-- Compact target form -->
+        <div class="overlay" style="inset:auto 0 env(safe-area-inset-bottom) 0; justify-content:center;">
+            <div class="panel" style="grid-auto-flow:row; gap:8px;">
+                <div class="row">
+                    <label>Lat <input class="w-24" id="latInput" type="number" step="0.000001" placeholder="10.500000"></label>
+                    <label>Lon <input class="w-24" id="lonInput" type="number" step="0.000001" placeholder="-66.900000"></label>
+                    <label>Dist m <input class="w-18" id="distInput" type="number" step="0.1" value="6"></label>
+                    <button id="applyTarget">Set Target</button>
+                </div>
+                <div class="row">
+                    <span class="pill" id="targetPill">Target: —</span>
+                    <span class="pill" id="rangePill">Range: —</span>
+                    <button id="faceToggle" title="Toggle model yaw: face target vs face you">Face: target</button>
+                </div>
+            </div>
+        </div>
+
+        <a-scene id="scene" embedded vr-mode-ui="enabled: false"
+            renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
+            arjs="
+            sourceType: webcam;
+            facingMode: environment;
+            debugUIEnabled: false;
+            videoTexture: true;
+            trackingMethod: best;
+            sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
+            ">
+            <a-assets>
+                <!-- Replace with your GLB -->
+                <a-asset-item id="model" src="test.glb"></a-asset-item>
+            </a-assets>
+
+            <!-- Lights -->
+            <a-entity light="type: ambient; intensity: 0.8"></a-entity>
+            <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
+
+            <!-- Camera -->
+            <a-entity id="camera" camera look-controls="touchEnabled: true; mouseEnabled: false" wasd-controls="enabled:false"></a-entity>
+
+            <!-- FOLLOW -->
+            <a-entity id="holderFollow" position="0 0 -6">
+                <a-entity id="modelFollow" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
+
+            <!-- PLACE (manual world lock) -->
+            <a-entity id="holderAnchor" visible="false">
+                <a-entity id="modelAnchor" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
+
+            <!-- NORTH -->
+            <a-entity id="holderNorth" visible="false" north-lock="dist: 6; height: 0">
+                <a-entity id="modelNorth" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
+
+            <!-- TARGET (bearing to GPS lat/lon) -->
+            <a-entity id="holderTarget" visible="false" target-lock="dist: 6; height: 0; lat: 0; lon: 0; face: target">
+                <a-entity id="modelTarget" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
+        </a-scene>
+
+        <script>
+            // ----- Constants & elements -----
+            const FIXED_SCALE  = 0.05;
+            const FIXED_HEIGHT = 0.0;
+            const FIXED_ROT_Y  = 0.0;
+
+            const sceneEl = document.getElementById('scene');
+            const camEl   = document.getElementById('camera');
+
+            const holderFollow = document.getElementById('holderFollow');
+            const modelFollow  = document.getElementById('modelFollow');
+
+            const holderAnchor = document.getElementById('holderAnchor');
+            const modelAnchor  = document.getElementById('modelAnchor');
+
+            const holderNorth  = document.getElementById('holderNorth');
+            const modelNorth   = document.getElementById('modelNorth');
+
+            const holderTarget = document.getElementById('holderTarget');
+            const modelTarget  = document.getElementById('modelTarget');
+
+            const statusEl     = document.getElementById('status');
+            const modePill     = document.getElementById('modePill');
+            const compassPill  = document.getElementById('compassPill');
+            const gpsPill      = document.getElementById('gpsPill');
+            const targetPill   = document.getElementById('targetPill');
+            const rangePill    = document.getElementById('rangePill');
+
+            const startBtn  = document.getElementById('start');
+            const flipBtn   = document.getElementById('flip');
+            const placeBtn  = document.getElementById('btnPlace');
+            const followBtn = document.getElementById('btnFollow');
+            const northBtn  = document.getElementById('btnNorth');
+            const targetBtn = document.getElementById('btnTarget');
+            const snapBtn   = document.getElementById('btnSnap');
+
+            const latInput  = document.getElementById('latInput');
+            const lonInput  = document.getElementById('lonInput');
+            const distInput = document.getElementById('distInput');
+            const applyTargetBtn = document.getElementById('applyTarget');
+            const faceToggleBtn  = document.getElementById('faceToggle');
+
+            function setStatus(msg, cls=''){ statusEl.className = 'muted ' + (cls||''); statusEl.textContent = msg; }
+
+            function applyFixedXforms(entity){
+                entity.object3D.position.set(0, FIXED_HEIGHT, 0);
+                entity.object3D.rotation.set(0, THREE.MathUtils.degToRad(FIXED_ROT_Y), 0);
+                entity.object3D.scale.set(FIXED_SCALE, FIXED_SCALE, FIXED_SCALE);
+            }
+            [modelFollow, modelAnchor, modelNorth, modelTarget].forEach(applyFixedXforms);
+
+            function placeFollow(){ holderFollow.object3D.position.set(0, 0, -Number(distInput.value || 6)); }
+
+            // ----- Start / Flip -----
+            async function startAR(){
+                try{
+                    const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                    if (sys && sys.arSource && sys.arSource.ready === false) await sys.arSource.start();
+
+                    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        try { await DeviceOrientationEvent.requestPermission(); } catch(_){}
+                    }
+                    startGPS();
+                    setStatus('Camera & sensors started','ok');
+                }catch(e){ setStatus('Start failed: ' + e.message,'err'); }
+            }
+            let usingFront = false;
+            async function flipCamera(){
+                const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                if (!sys || !sys.arSource) return;
+                try {
+                    usingFront = !usingFront;
+                    await sys.arSource.stop();
+                    sys.arSource.parameters.facingMode = usingFront ? 'user' : 'environment';
+                    await sys.arSource.start();
+                    setStatus('Camera: ' + (usingFront?'front':'rear'),'ok');
+                }catch(e){ setStatus('Flip failed: ' + e.message,'err'); }
+            }
+            startBtn.addEventListener('click', startAR);
+            flipBtn.addEventListener('click', flipCamera);
+
+            document.addEventListener('visibilitychange', () => {
+                const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                if (!sys || !sys.arSource) return;
+                if (!document.hidden) {
+                    const video = sys.arSource.domElement;
+                    if (video && (video.paused || video.readyState < 2)) {
+                        sys.arSource.start().then(()=> setStatus('Resumed after tab switch','ok'));
+                    }
+                }
+            });
+
+            // ----- Modes -----
+            let currentMode = 'FOLLOW';
+            function setMode(m){
+                currentMode = m;
+                modePill.textContent = `Mode: ${m}`;
+                const isFollow = m === 'FOLLOW';
+                const isAnchor = m === 'ANCHOR';
+                const isNorth  = m === 'NORTH';
+                const isTarget = m === 'TARGET';
+                holderFollow.setAttribute('visible', isFollow);
+                holderAnchor.setAttribute('visible', isAnchor);
+                holderNorth.setAttribute('visible',  isNorth);
+                holderTarget.setAttribute('visible', isTarget);
+                if (isFollow) placeFollow();
+            }
+            setMode('FOLLOW');
+
+            function worldLockPlace(){
+                const camObj = camEl.object3D;
+                camObj.updateMatrixWorld();
+
+                const camPos   = new THREE.Vector3();
+                const camQuat  = new THREE.Quaternion();
+                const camScale = new THREE.Vector3();
+                camObj.matrixWorld.decompose(camPos, camQuat, camScale);
+
+                const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
+                const targetPos = camPos.clone().add(forward.multiplyScalar(Number(distInput.value || 6)));
+
+                holderAnchor.object3D.position.copy(targetPos);
+
+                const euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+                holderAnchor.object3D.rotation.set(0, euler.y, 0);
+
+                setMode('ANCHOR');
+                applyFixedXforms(modelAnchor);
+            }
+            placeBtn.addEventListener('click', worldLockPlace);
+            followBtn.addEventListener('click', ()=>{ setMode('FOLLOW'); placeFollow(); });
+            northBtn.addEventListener('click',  ()=>{ setMode('NORTH');  holderNorth.setAttribute('north-lock', `dist:${Number(distInput.value||6)}; height:0`); });
+            targetBtn.addEventListener('click', ()=>{ setMode('TARGET'); });
+
+            // ----- NORTH LOCK -----
+            AFRAME.registerComponent('north-lock', {
+                schema: { dist:{default:6}, height:{default:0} },
+                init(){ this.cam = document.getElementById('camera'); this.tmp = new THREE.Vector3(); this.north = new THREE.Vector3(0,0,-1); },
+                tick(){
+                    if (!this.cam) return;
+                    const obj = this.el.object3D;
+                    const camObj = this.cam.object3D;
+                    camObj.updateMatrixWorld();
+                    camObj.getWorldPosition(this.tmp);
+                    obj.position.copy(this.tmp).addScaledVector(this.north, this.data.dist);
+                    obj.position.y += this.data.height;
+
+                    // face user horizontally
+                    const camYaw = new THREE.Euler().setFromQuaternion(camObj.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+                    obj.rotation.set(0, camYaw + Math.PI, 0);
+                }
+            });
+
+            // ----- TARGET LOCK (bearing to lat/lon) -----
+            // We use your live GPS (latA, lonA) + target (latB, lonB) to compute:
+            //   bearing (deg clockwise from north)
+            //   distance (meters)
+            // Placement: camera position + dir(bearing) * dist
+            // dir(bearing) in A-Frame world: X =  sin(rad), Z = -cos(rad)
+            let userLat = null, userLon = null, userFix = null;
+            let watchId = null;
+
+            function toRad(d){ return d * Math.PI/180; }
+            function toDeg(r){ return r * 180/Math.PI; }
+
+            function haversine(lat1, lon1, lat2, lon2){
+                const R = 6371000; // meters
+                const φ1 = toRad(lat1), φ2 = toRad(lat2);
+                const Δφ = toRad(lat2 - lat1);
+                const Δλ = toRad(lon2 - lon1);
+                const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+                const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R*c;
+            }
+
+            function bearingDeg(lat1, lon1, lat2, lon2){
+                const φ1 = toRad(lat1), φ2 = toRad(lat2);
+                const λ1 = toRad(lon1), λ2 = toRad(lon2);
+                const y = Math.sin(λ2-λ1) * Math.cos(φ2);
+                const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
+                return (toDeg(Math.atan2(y, x)) + 360) % 360; // 0..360 from north, clockwise
+            }
+
+            function startGPS(){
+                if (!('geolocation' in navigator)) { gpsPill.textContent = 'GPS: unavailable'; return; }
+                if (watchId) return;
+                watchId = navigator.geolocation.watchPosition(
+                    pos => {
+                        userFix = pos;
+                        userLat = pos.coords.latitude;
+                        userLon = pos.coords.longitude;
+                        const acc = pos.coords.accuracy|0;
+                        gpsPill.textContent = `GPS: ${userLat.toFixed(5)}, ${userLon.toFixed(5)} ±${acc}m`;
+                    },
+                    err => { gpsPill.textContent = `GPS: error (${err.code})`; },
+                    { enableHighAccuracy:true, maximumAge:1000, timeout:10000 }
+                );
+            }
+
+            AFRAME.registerComponent('target-lock', {
+                schema: { lat:{default:0}, lon:{default:0}, dist:{default:6}, height:{default:0}, face:{default:'target'} }, // face: 'target' | 'user'
+                init(){
+                    this.cam = document.getElementById('camera');
+                    this.tmp = new THREE.Vector3();
+                    this.quat = new THREE.Quaternion();
+                    this.euler = new THREE.Euler(0,0,0,'YXZ');
+                    this.lastRange = null;
+                },
+                update(){
+                    // nothing special; values picked up each tick
+                },
+                tick(){
+                    if (!this.cam || userLat == null || userLon == null) return;
+                    const obj = this.el.object3D;
+                    const camObj = this.cam.object3D;
+
+                    // Compute bearing & range
+                    const brg = bearingDeg(userLat, userLon, this.data.lat, this.data.lon);
+                    const rng = haversine(userLat, userLon, this.data.lat, this.data.lon);
+
+                    // Place at camera position + direction(brg) * dist
+                    camObj.updateMatrixWorld();
+                    camObj.getWorldPosition(this.tmp);
+
+                    const rad = toRad(brg);
+                    const dirX = Math.sin(rad);
+                    const dirZ = -Math.cos(rad);
+                    obj.position.set(
+                        this.tmp.x + dirX * this.data.dist,
+                        this.tmp.y + this.data.height,
+                        this.tmp.z + dirZ * this.data.dist
+                    );
+
+                    // Yaw: face target direction (default) or face user
+                    // If facing target: object forward (-Z) looks toward target => rotate so -Z aligns with [dirX,0,dirZ]
+                    // Yaw angle from world north: brg, so yaw to face target = +brg degrees
+                    const yaw = this.data.face === 'target' ? toRad(brg) : (new THREE.Euler().setFromQuaternion(camObj.getWorldQuaternion(this.quat),'YXZ').y + Math.PI);
+                    obj.rotation.set(0, yaw, 0);
+
+                    // Update range pill sparingly
+                    if (this.lastRange == null || Math.abs(rng - this.lastRange) > 1) {
+                        this.lastRange = rng;
+                        rangePill.textContent = `Range: ${rng < 1000 ? rng.toFixed(1)+' m' : (rng/1000).toFixed(2)+' km'}`;
+                    }
+                }
+            });
+
+            // ----- Compass UI (heading only) -----
+            (function compassUI(){
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                function screenAngle(){ if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle; if (typeof window.orientation === 'number') return (window.orientation+360)%360; return 0; }
+                function normalize(d){ d = d%360; return d<0? d+360 : d; }
+                let ema = null; const SMOOTH=0.15;
+                function smooth(v){ if (v==null) return ema; if (ema==null){ ema=v; return v; } const d=(((v-ema)+540)%360)-180; ema=(ema+SMOOTH*d+360)%360; return ema; }
+                function computeHeading(e){
+                    if (typeof e.webkitCompassHeading==='number') return normalize(e.webkitCompassHeading);
+                    if (typeof e.alpha==='number'){ let h=360-e.alpha; h=normalize(h+screenAngle()); return h; }
+                    return null;
+                }
+                function onOrientation(e){ const h=computeHeading(e); if (typeof h==='number' && !Number.isNaN(h)) { const s=smooth(h); compassPill.textContent = `Heading: ${Math.round(s)}°`; } }
+                async function ensurePermission(){
+                    if (!isIOS) return true;
+                    const fn = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission;
+                    if (typeof fn==='function'){ try { return (await fn())==='granted'; } catch { return false; } }
+                    return true;
+                }
+                if (!isIOS) {
+                    window.addEventListener('deviceorientation', onOrientation, {passive:true});
+                } else {
+                    startBtn.addEventListener('click', async ()=>{ if (await ensurePermission()) window.addEventListener('deviceorientation', onOrientation, {passive:true}); });
+                }
+                (screen.orientation || window).addEventListener?.('change', ()=>{ ema=null; });
+            })();
+
+            // ----- UI wiring: set target, toggle facing -----
+            let faceMode = 'target'; // 'target' | 'user'
+            faceToggleBtn.addEventListener('click', ()=>{
+                faceMode = faceMode === 'target' ? 'user' : 'target';
+                faceToggleBtn.textContent = `Face: ${faceMode}`;
+                holderTarget.setAttribute('target-lock', `lat:${latInput.value||0}; lon:${lonInput.value||0}; dist:${Number(distInput.value||6)}; height:0; face:${faceMode}`);
+            });
+
+            applyTargetBtn.addEventListener('click', ()=>{
+                const lat = Number(latInput.value);
+                const lon = Number(lonInput.value);
+                const dist = Number(distInput.value||6);
+                if (!isFinite(lat) || !isFinite(lon)) { alert('Enter valid lat/lon'); return; }
+                targetPill.textContent = `Target: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+                holderTarget.setAttribute('target-lock', `lat:${lat}; lon:${lon}; dist:${dist}; height:0; face:${faceMode}`);
+                setMode('TARGET');
+            });
+
+            // ----- Snapshot -----
+            snapBtn.addEventListener('click', ()=>{
+                const renderer = sceneEl.renderer; if (!renderer) return alert('Renderer not ready.');
+                renderer.preserveDrawingBuffer = true;
+                const dataURL = renderer.domElement.toDataURL('image/png');
+                const a = document.createElement('a'); a.href = dataURL; a.download = 'ar-photo.png'; a.click();
+                renderer.preserveDrawingBuffer = false;
+            });
+
+            // ----- Hints -----
+            if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+                setStatus('Use HTTPS or localhost for camera, sensors & GPS','warn');
+            } else {
+                setStatus('Ready. Tap Start (iOS needs a gesture).','ok');
+            }
+
+            // Default follow placement
+            placeFollow();
+        </script>
+    </body>
+</html>
+
