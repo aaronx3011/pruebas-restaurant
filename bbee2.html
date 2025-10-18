@@ -1,221 +1,221 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>AR Photo with glTF — Gyro-Anchored (A-Frame + AR.js)</title>
-  <style>
-    html, body { height: 100%; margin: 0; background: #000; }
-    .overlay { position: fixed; inset: env(safe-area-inset-top) 0 auto 0; display: flex; justify-content: center; padding: 12px; z-index: 10; pointer-events: none; }
-    .panel { pointer-events: auto; background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px; border-radius: 10px; font-family: system-ui, sans-serif; font-size: 14px; display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px); }
-    .panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
-    .panel a { color: #6ee7ff; }
-    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
-  </style>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        <title>AR Photo with glTF — Gyro-Anchored (A-Frame + AR.js)</title>
+        <style>
+html, body { height: 100%; margin: 0; background: #000; }
+.overlay { position: fixed; inset: env(safe-area-inset-top) 0 auto 0; display: flex; justify-content: center; padding: 12px; z-index: 10; pointer-events: none; }
+.panel { pointer-events: auto; background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px; border-radius: 10px; font-family: system-ui, sans-serif; font-size: 14px; display: inline-flex; gap: 10px; align-items: center; backdrop-filter: blur(6px); }
+.panel button { appearance: none; border: 1px solid rgba(255,255,255,.25); border-radius: 8px; padding: 6px 10px; background: rgba(255,255,255,.08); color: #fff; cursor: pointer; }
+.panel a { color: #6ee7ff; }
+a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+        </style>
 
-  <!-- Stable combo -->
-  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
-</head>
-<body>
-  <div class="overlay">
-    <div class="panel" id="ui">
-      <span id="status">If you see black, tap Start (iOS needs a gesture).</span>
-      <button id="start">Start camera</button>
-      <button id="flip">Flip cam</button>
-      <button id="btnPlace">📍 Place</button>
-      <button id="btnFollow">🎯 Follow</button>
-      <button id="btnSnap">📸 Take Photo</button>
-    </div>
-  </div>
+        <!-- Stable combo -->
+        <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+    </head>
+    <body>
+        <div class="overlay">
+            <div class="panel" id="ui">
+                <span id="status">If you see black, tap Start (iOS needs a gesture).</span>
+                <button id="start">Start camera</button>
+                <button id="flip">Flip cam</button>
+                <button id="btnPlace">📍 Place</button>
+                <button id="btnFollow">🎯 Follow</button>
+                <button id="btnSnap">📸 Take Photo</button>
+            </div>
+        </div>
 
-  <a-scene id="scene" embedded vr-mode-ui="enabled: false"
-           renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
-           arjs="
-             sourceType: webcam;
-             facingMode: environment;
-             debugUIEnabled: false;
-             videoTexture: true;
-             trackingMethod: best;
-             sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
-           "
-  >
-    <a-assets>
-      <!-- Reemplaza con tu GLB/GLTF. Recomiendo .glb con texturas embebidas. -->
-      <a-asset-item id="model" src="BCool.glb.glb"></a-asset-item>
-    </a-assets>
+        <a-scene id="scene" embedded vr-mode-ui="enabled: false"
+            renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance"
+            arjs="
+            sourceType: webcam;
+            facingMode: environment;
+            debugUIEnabled: false;
+            videoTexture: true;
+            trackingMethod: best;
+            sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
+            "
+            >
+            <a-assets>
+                <!-- Reemplaza con tu GLB/GLTF. Recomiendo .glb con texturas embebidas. -->
+            <a-asset-item id="model" src="test.glb"></a-asset-item>
+            </a-assets>
 
-    <!-- Luz -->
-    <a-entity light="type: ambient; intensity: 0.8"></a-entity>
-    <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
+            <!-- Luz -->
+            <a-entity light="type: ambient; intensity: 0.8"></a-entity>
+            <a-entity light="type: directional; intensity: 0.8" position="1 2 1"></a-entity>
 
-    <!-- Cámara (giroscopio guía la rotación) -->
-    <a-entity id="camera" camera look-controls="touchEnabled: true; mouseEnabled: false" wasd-controls="enabled:false"></a-entity>
+            <!-- Cámara (giroscopio guía la rotación) -->
+            <a-entity id="camera" camera look-controls="touchEnabled: true; mouseEnabled: false" wasd-controls="enabled:false"></a-entity>
 
-    <!-- FOLLOW: a distancia fija delante de la cámara -->
-    <a-entity id="holderFollow" position="0 0 -6">
-      <a-entity id="modelFollow" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
-    </a-entity>
+            <!-- FOLLOW: a distancia fija delante de la cámara -->
+            <a-entity id="holderFollow" position="0 0 -6">
+                <a-entity id="modelFollow" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
 
-    <!-- ANCHOR: bloqueado en mundo usando gyro -->
-    <a-entity id="holderAnchor" visible="false">
-      <a-entity id="modelAnchor" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
-    </a-entity>
-  </a-scene>
+            <!-- ANCHOR: bloqueado en mundo usando gyro -->
+            <a-entity id="holderAnchor" visible="false">
+                <a-entity id="modelAnchor" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+            </a-entity>
+        </a-scene>
 
-  <script>
-    // Constantes fijas solicitadas
-    const FIXED_DIST   = 6.0;   // metros
-    const FIXED_SCALE  = 0.05;  // 5% del tamaño original
-    const FIXED_HEIGHT = 0.0;   // metros
-    const FIXED_ROT_Y  = 0.0;   // grados
+        <script>
+            // Constantes fijas solicitadas
+            const FIXED_DIST   = 6.0;   // metros
+            const FIXED_SCALE  = 0.05;  // 5% del tamaño original
+            const FIXED_HEIGHT = 0.0;   // metros
+            const FIXED_ROT_Y  = 0.0;   // grados
 
-    const sceneEl = document.getElementById('scene');
-    const camEl = document.getElementById('camera');
+            const sceneEl = document.getElementById('scene');
+            const camEl = document.getElementById('camera');
 
-    const holderFollow = document.getElementById('holderFollow');
-    const modelFollow  = document.getElementById('modelFollow');
+            const holderFollow = document.getElementById('holderFollow');
+            const modelFollow  = document.getElementById('modelFollow');
 
-    const holderAnchor = document.getElementById('holderAnchor');
-    const modelAnchor  = document.getElementById('modelAnchor');
+            const holderAnchor = document.getElementById('holderAnchor');
+            const modelAnchor  = document.getElementById('modelAnchor');
 
-    const statusEl = document.getElementById('status');
-    const modeElText = (() => {
-      // añadimos un span para mostrar el modo sin sliders
-      const span = document.createElement('span');
-      span.style.marginLeft = '8px';
-      document.getElementById('ui').appendChild(span);
-      return span;
-    })();
+            const statusEl = document.getElementById('status');
+            const modeElText = (() => {
+                // añadimos un span para mostrar el modo sin sliders
+                const span = document.createElement('span');
+                span.style.marginLeft = '8px';
+                document.getElementById('ui').appendChild(span);
+                return span;
+            })();
 
-    const startBtn = document.getElementById('start');
-    const flipBtn  = document.getElementById('flip');
-    const placeBtn = document.getElementById('btnPlace');
-    const followBtn= document.getElementById('btnFollow');
-    const snapBtn  = document.getElementById('btnSnap');
+            const startBtn = document.getElementById('start');
+            const flipBtn  = document.getElementById('flip');
+            const placeBtn = document.getElementById('btnPlace');
+            const followBtn= document.getElementById('btnFollow');
+            const snapBtn  = document.getElementById('btnSnap');
 
-    function setStatus(msg){ statusEl.textContent = msg; }
+            function setStatus(msg){ statusEl.textContent = msg; }
 
-    // --- Cámara: iniciar / voltear ------------------------------------------
-    async function startAR(){
-      try{
-        const sys = sceneEl.systems && sceneEl.systems['arjs'];
-        if (sys && sys.arSource && sys.arSource.ready === false) {
-          await sys.arSource.start();
-        }
-        // Permiso iOS
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-          try { await DeviceOrientationEvent.requestPermission(); } catch(_){}
-        }
-        setStatus('Camera started');
-      }catch(e){ setStatus('Start failed: ' + e.message); }
-    }
+            // --- Cámara: iniciar / voltear ------------------------------------------
+            async function startAR(){
+                try{
+                    const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                    if (sys && sys.arSource && sys.arSource.ready === false) {
+                        await sys.arSource.start();
+                    }
+                    // Permiso iOS
+                    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        try { await DeviceOrientationEvent.requestPermission(); } catch(_){}
+                    }
+                    setStatus('Camera started');
+                }catch(e){ setStatus('Start failed: ' + e.message); }
+            }
 
-    let usingFront = false;
-    async function flipCamera(){
-      const sys = sceneEl.systems && sceneEl.systems['arjs'];
-      if (!sys || !sys.arSource) return;
-      try {
-        usingFront = !usingFront;
-        await sys.arSource.stop();
-        sys.arSource.parameters.facingMode = usingFront ? 'user' : 'environment';
-        await sys.arSource.start();
-        setStatus('Camera: ' + (usingFront ? 'front' : 'rear'));
-      } catch (e) { setStatus('Flip failed: ' + e.message); }
-    }
+            let usingFront = false;
+            async function flipCamera(){
+                const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                if (!sys || !sys.arSource) return;
+                try {
+                    usingFront = !usingFront;
+                    await sys.arSource.stop();
+                    sys.arSource.parameters.facingMode = usingFront ? 'user' : 'environment';
+                    await sys.arSource.start();
+                    setStatus('Camera: ' + (usingFront ? 'front' : 'rear'));
+                } catch (e) { setStatus('Flip failed: ' + e.message); }
+            }
 
-    document.addEventListener('visibilitychange', () => {
-      const sys = sceneEl.systems && sceneEl.systems['arjs'];
-      if (!sys || !sys.arSource) return;
-      if (!document.hidden) {
-        const video = sys.arSource.domElement;
-        if (video && (video.paused || video.readyState < 2)) {
-          sys.arSource.start().then(()=> setStatus('Resumed after tab switch'));
-        }
-      }
-    });
+            document.addEventListener('visibilitychange', () => {
+                const sys = sceneEl.systems && sceneEl.systems['arjs'];
+                if (!sys || !sys.arSource) return;
+                if (!document.hidden) {
+                    const video = sys.arSource.domElement;
+                    if (video && (video.paused || video.readyState < 2)) {
+                        sys.arSource.start().then(()=> setStatus('Resumed after tab switch'));
+                    }
+                }
+            });
 
-    startBtn.addEventListener('click', startAR);
-    flipBtn.addEventListener('click', flipCamera);
+            startBtn.addEventListener('click', startAR);
+            flipBtn.addEventListener('click', flipCamera);
 
-    // --- Fijar transformaciones del modelo ----------------------------------
-    function applyFixedXforms(targetEntity){
-      // Altura fija
-      targetEntity.object3D.position.set(0, FIXED_HEIGHT, 0);
-      // Rotación Y fija
-      targetEntity.object3D.rotation.set(0, THREE.MathUtils.degToRad(FIXED_ROT_Y), 0);
-      // Escala fija 0.05x
-      targetEntity.object3D.scale.set(FIXED_SCALE, FIXED_SCALE, FIXED_SCALE);
-    }
+            // --- Fijar transformaciones del modelo ----------------------------------
+            function applyFixedXforms(targetEntity){
+                // Altura fija
+                targetEntity.object3D.position.set(0, FIXED_HEIGHT, 0);
+                // Rotación Y fija
+                targetEntity.object3D.rotation.set(0, THREE.MathUtils.degToRad(FIXED_ROT_Y), 0);
+                // Escala fija 0.05x
+                targetEntity.object3D.scale.set(FIXED_SCALE, FIXED_SCALE, FIXED_SCALE);
+            }
 
-    // FOLLOW: siempre delante de la cámara a 6 m
-    function placeFollowDistance(){
-      holderFollow.object3D.position.set(0, 0, -FIXED_DIST);
-    }
+            // FOLLOW: siempre delante de la cámara a 6 m
+            function placeFollowDistance(){
+                holderFollow.object3D.position.set(0, 0, -FIXED_DIST);
+            }
 
-    // Inicializa
-    placeFollowDistance();
-    applyFixedXforms(modelFollow);
-    applyFixedXforms(modelAnchor);
+            // Inicializa
+            placeFollowDistance();
+            applyFixedXforms(modelFollow);
+            applyFixedXforms(modelAnchor);
 
-    // --- FOLLOW vs ANCHOR ----------------------------------------------------
-    let currentMode = 'FOLLOW';
-    function setMode(m){
-      currentMode = m;
-      modeElText.textContent = `Mode: ${m}`;
-      const follow = (m === 'FOLLOW');
-      holderFollow.setAttribute('visible', follow);
-      holderAnchor.setAttribute('visible', !follow);
-      if (follow) placeFollowDistance();
-    }
-    setMode('FOLLOW');
+            // --- FOLLOW vs ANCHOR ----------------------------------------------------
+            let currentMode = 'FOLLOW';
+            function setMode(m){
+                currentMode = m;
+                modeElText.textContent = `Mode: ${m}`;
+                const follow = (m === 'FOLLOW');
+                holderFollow.setAttribute('visible', follow);
+                holderAnchor.setAttribute('visible', !follow);
+                if (follow) placeFollowDistance();
+            }
+            setMode('FOLLOW');
 
-    function worldLockPlace(){
-      // Toma un punto al frente a 6 m, y lo deja fijo en el mundo
-      const camObj = camEl.object3D;
-      camObj.updateMatrixWorld();
+            function worldLockPlace(){
+                // Toma un punto al frente a 6 m, y lo deja fijo en el mundo
+                const camObj = camEl.object3D;
+                camObj.updateMatrixWorld();
 
-      const camPos   = new THREE.Vector3();
-      const camQuat  = new THREE.Quaternion();
-      const camScale = new THREE.Vector3();
-      camObj.matrixWorld.decompose(camPos, camQuat, camScale);
+                const camPos   = new THREE.Vector3();
+                const camQuat  = new THREE.Quaternion();
+                const camScale = new THREE.Vector3();
+                camObj.matrixWorld.decompose(camPos, camQuat, camScale);
 
-      const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
-      const targetPos = camPos.clone().add(forward.multiplyScalar(FIXED_DIST));
+                const forward = new THREE.Vector3(0,0,-1).applyQuaternion(camQuat);
+                const targetPos = camPos.clone().add(forward.multiplyScalar(FIXED_DIST));
 
-      holderAnchor.object3D.position.copy(targetPos);
+                holderAnchor.object3D.position.copy(targetPos);
 
-      // Mantener nivelado en horizonte
-      const euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
-      holderAnchor.object3D.rotation.set(0, euler.y, 0);
+                // Mantener nivelado en horizonte
+                const euler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+                holderAnchor.object3D.rotation.set(0, euler.y, 0);
 
-      setMode('ANCHOR');
-      applyFixedXforms(modelAnchor);
-    }
+                setMode('ANCHOR');
+                applyFixedXforms(modelAnchor);
+            }
 
-    document.getElementById('btnPlace').addEventListener('click', worldLockPlace);
-    document.getElementById('btnFollow').addEventListener('click', ()=>{
-      setMode('FOLLOW');
-      applyFixedXforms(modelFollow);
-      placeFollowDistance();
-    });
+            document.getElementById('btnPlace').addEventListener('click', worldLockPlace);
+            document.getElementById('btnFollow').addEventListener('click', ()=>{
+                setMode('FOLLOW');
+                applyFixedXforms(modelFollow);
+                placeFollowDistance();
+            });
 
-    // --- SNAPSHOT ------------------------------------------------------------
-    snapBtn.addEventListener('click', ()=>{
-      const renderer = sceneEl.renderer; if (!renderer) return alert('Renderer not ready.');
-      renderer.preserveDrawingBuffer = true;
-      const dataURL = renderer.domElement.toDataURL('image/png');
-      const a = document.createElement('a'); a.href = dataURL; a.download = 'ar-photo.png'; a.click();
-      renderer.preserveDrawingBuffer = false;
-    });
+            // --- SNAPSHOT ------------------------------------------------------------
+            snapBtn.addEventListener('click', ()=>{
+                const renderer = sceneEl.renderer; if (!renderer) return alert('Renderer not ready.');
+                renderer.preserveDrawingBuffer = true;
+                const dataURL = renderer.domElement.toDataURL('image/png');
+                const a = document.createElement('a'); a.href = dataURL; a.download = 'ar-photo.png'; a.click();
+                renderer.preserveDrawingBuffer = false;
+            });
 
-    // --- Mensajes ------------------------------------------------------------
-    if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
-      setStatus('Use HTTPS or localhost for camera access');
-    } else {
-      setStatus('If you see black, tap Start (iOS requires a gesture)');
-    }
-  </script>
-</body>
+            // --- Mensajes ------------------------------------------------------------
+            if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) {
+                setStatus('Use HTTPS or localhost for camera access');
+            } else {
+                setStatus('If you see black, tap Start (iOS requires a gesture)');
+            }
+        </script>
+    </body>
 </html>
 
