@@ -1,283 +1,241 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Web Compass — Stabilized</title>
-  <style>
-    :root{ --bg:#0b1020; --panel:#0e1628; --muted:#90a4b8; --text:#e8edf4; --accent:#4fc3f7; --ring:#1f2a3a; --ring2:#162235; --tick:#42556b; --north:#f87171; --needle:#ff5a5a; }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0; background: radial-gradient(1200px 800px at 70% -10%, #0c1a32 0%, var(--bg) 50%); color:var(--text); font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial; display:grid; place-items:center}
-    .wrap{width:min(720px,100%); padding:20px}
-    header{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px}
-    header h1{font-size:20px; margin:0}
-    .status{font-size:12px; color:var(--muted)}
-    .card{background:linear-gradient(180deg,#0b1527, #0a1220); border:1px solid #1e2a3a; border-radius:16px; padding:16px; box-shadow:0 20px 50px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04)}
-    .grid{display:grid; grid-template-columns: 1fr; gap:16px}
-    @media (min-width:860px){ .grid{ grid-template-columns: 1fr 360px; } }
-    .compassBox{display:grid; place-items:center; padding:10px}
-    .compass{ position:relative; width:min(80vmin,520px); aspect-ratio:1; border-radius:50%; background: radial-gradient(60% 60% at 50% 50%, #0f1d34 0%, #0b1220 55%), conic-gradient(from 0deg, #0c1a2f, #0c1a2f); border: 10px solid var(--ring); outline: 1px solid #263447; box-shadow: inset 0 0 0 2px var(--ring2), 0 10px 30px rgba(0,0,0,.4); overflow:hidden; }
-    .rose{ position:absolute; inset:0; display:grid; place-items:center; transition: transform .08s ease-out; }
-    .ticks{ position:absolute; inset:12px; }
-    .tick{ position:absolute; left:50%; top:0; width:2px; height:12px; background:var(--tick); transform-origin:center calc(50% + 200px); opacity:.8 }
-    .tick.big{ height:20px; background:#6b88a6 }
-    .labels{ position:absolute; inset:0; display:grid; place-items:center; font-weight:700; letter-spacing:.08em }
-    .labels span{ position:absolute; color:#b9cadd }
-    .labels .N{ top:12px; color:var(--north); font-size:22px }
-    .labels .E{ right:12px }
-    .labels .S{ bottom:12px }
-    .labels .W{ left:12px }
-    .needleWrap{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none }
-    .needle{ position:absolute; width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent; border-bottom:140px solid var(--needle); filter: drop-shadow(0 6px 8px rgba(0,0,0,.4)); transform-origin:50% calc(100% - 6px); transition: transform .08s ease-out }
-    .pivot{ position:absolute; width:16px; height:16px; border-radius:999px; background:#1e2a3c; border:2px solid #2a3b52; box-shadow: inset 0 0 0 3px #101826 }
-    .readout{display:grid; gap:10px}
-    .value{font-size:42px; font-weight:700}
-    .meta{font-size:13px; color:var(--muted)}
-    .controls{display:grid; gap:8px}
-    .row{display:flex; gap:8px; flex-wrap:wrap}
-    button{appearance:none; cursor:pointer; border:1px solid #2a3a51; background:linear-gradient(180deg,#162742,#0f2037); color:var(--text); padding:10px 12px; border-radius:10px; font-weight:600}
-    button:hover{filter:brightness(1.05)}
-    button:active{transform:translateY(1px)}
-    input[type=range]{width:100%}
-    .rangeRow{display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center}
-    .badge{display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #2a3a51; font-size:12px; color:var(--muted)}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <header>
-      <h1>Web Compass</h1>
-      <div class="status" id="status">Ready — tap Start to grant motion permission.</div>
-    </header>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <title>Phone Compass (Web)</title>
+        <style>
+:root {
+    --bg: #0f172a;        /* slate-900 */
+    --card: #111827;      /* gray-900 */
+    --text: #e5e7eb;      /* gray-200 */
+    --muted: #94a3b8;     /* slate-400 */
+    --accent: #38bdf8;    /* sky-400 */
+    --ring: #1f2937;      /* gray-800 */
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+.wrap { min-height: 100%; display: grid; place-items: center; padding: 16px; }
+.card { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--ring); border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.title { font-size: 18px; font-weight: 600; margin: 0 0 12px; }
+.sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.compass-box { display: grid; place-items: center; margin: 16px 0; }
+.dial {
+    width: 260px; height: 260px; border-radius: 50%;
+    border: 10px solid var(--ring);
+    display: grid; place-items: center;
+    position: relative; background: radial-gradient(ellipse at center, #0b1220 0%, #0b1220 70%, #060a12 100%);
+    box-shadow: inset 0 0 40px rgba(0,0,0,.5);
+    transition: transform .08s linear;
+}
+  .ticks { position: absolute; inset: 14px; }
+  /* Major ticks every 30° */
+  .ticks::before, .ticks::after { content: ""; }
+  .tick { position: absolute; left: 50%; top: 50%; width: 2px; height: 12px; background: #334155; transform-origin: 0  -104px; }
+  .label { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-118px); font-size: 14px; color: var(--muted); }
+  .north { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-120px); font-weight: 700; color: var(--accent); }
+  .needle {
+      position: absolute; width: 4px; height: 100px; background: #e11d48;  /* red */
+      top: 30px; left: 50%; transform: translateX(-50%);
+      border-radius: 2px;
+      box-shadow: 0 0 12px rgba(225,29,72,.5);
+  }
+  .pivot {
+      position: absolute; width: 12px; height: 12px; border-radius: 50%;
+      background: #e5e7eb; box-shadow: 0 0 10px rgba(255,255,255,.3);
+  }
+  .readout { display: flex; align-items: baseline; gap: 6px; justify-content: center; margin-top: 10px; }
+  .deg { font-size: 36px; font-variant-numeric: tabular-nums; }
+  .unit { color: var(--muted); }
+  .actions { display: grid; gap: 10px; margin-top: 16px; }
+  button {
+      appearance: none; border: 1px solid var(--ring); background: #0b1324; color: var(--text);
+      padding: 10px 12px; border-radius: 10px; cursor: pointer; font-weight: 600;
+  }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.35; }
+  .ok { color: #22c55e; }
+  .warn { color: #f59e0b; }
+  .err { color: #ef4444; }
+        </style>
+    </head>
+    <body>
+        <div class="wrap">
+            <div class="card">
+                <h1 class="title">Compass</h1>
+                <p class="sub">Tap “Enable compass” on iOS (requires HTTPS). On Android, it should start automatically.</p>
 
-    <div class="grid">
-      <div class="card compassBox">
-        <div class="compass">
-          <div class="rose" id="rose">
-            <div class="ticks" id="ticks"></div>
-            <div class="labels">
-              <span class="N">N</span>
-              <span class="E">E</span>
-              <span class="S">S</span>
-              <span class="W">W</span>
+                <div class="compass-box">
+                    <div class="dial" id="dial">
+                        <!-- 12 major ticks and labels -->
+                        <div class="ticks">
+                            <!-- Generate ticks via JS for precision -->
+                        </div>
+                        <div class="needle"></div>
+                        <div class="pivot"></div>
+                        <div class="north">N</div>
+                    </div>
+                    <div class="readout">
+                        <div class="deg" id="deg">—</div><div class="unit">°</div>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button id="enableBtn">Enable compass</button>
+                    <button id="calibBtn" title="If the heading drifts">Calibration tips</button>
+                </div>
+
+                <div class="hint" id="status">Status: <span class="warn">waiting for sensor…</span></div>
+                <div class="hint">Troubleshooting: be on HTTPS, allow motion/gyro permissions, avoid strong magnets, and keep the phone flat/upright consistently while testing.</div>
             </div>
-          </div>
-          <div class="needleWrap">
-            <div class="needle" id="needle"></div>
-            <div class="pivot"></div>
-          </div>
         </div>
-      </div>
 
-      <div class="card readout">
-        <div class="rangeRow"><div class="meta">Heading</div><span class="badge" id="qual">—</span></div>
-        <div class="value" id="headingVal">–°</div>
-        <div class="meta" id="dirVal">–</div>
-        <div class="meta" id="accVal">Accuracy: –</div>
-        <div class="controls">
-          <div class="row">
-            <button id="btnStart">Start</button>
-            <button id="btnStop">Stop</button>
-            <button id="btnCalib">Calibrate tip</button>
-          </div>
-          <div class="rangeRow">
-            <label for="smooth">Smoothing</label>
-            <span id="smoothVal">0.70</span>
-          </div>
-          <input id="smooth" type="range" min="0" max="1" step="0.01" value="0.70" />
-          <div class="rangeRow">
-            <label for="deadband">Deadband (°)</label>
-            <span id="deadbandVal">1.0</span>
-          </div>
-          <input id="deadband" type="range" min="0" max="3" step="0.1" value="1" />
-        </div>
-        <div class="meta">Tips: hold phone flat; avoid metal/magnets; do a gentle “figure‑8”. On iOS grant Motion access when asked.</div>
-      </div>
-    </div>
-  </div>
+        <script>
+            (function() {
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                const dial = document.getElementById('dial');
+                const degEl = document.getElementById('deg');
+                const statusEl = document.getElementById('status');
+                const enableBtn = document.getElementById('enableBtn');
+                const calibBtn = document.getElementById('calibBtn');
 
-  <script>
-    const statusEl = document.getElementById('status');
-    const headingEl = document.getElementById('headingVal');
-    const dirEl = document.getElementById('dirVal');
-    const accEl = document.getElementById('accVal');
-    const qualEl = document.getElementById('qual');
-    const rose = document.getElementById('rose');
-    const needle = document.getElementById('needle');
+                // Build ticks/labels precisely every 30°
+                const ticksHost = dial.querySelector('.ticks');
+                for (let i = 0; i < 360; i += 30) {
+                    const t = document.createElement('div');
+                    t.className = 'tick';
+                    t.style.transform = `translate(-1px,-1px) rotate(${i}deg) translate(0,-104px)`;
+                    ticksHost.appendChild(t);
 
-    const smoothSlider = document.getElementById('smooth');
-    const smoothVal = document.getElementById('smoothVal');
-    const deadbandSlider = document.getElementById('deadband');
-    const deadbandVal = document.getElementById('deadbandVal');
+                    const lbl = document.createElement('div');
+                    lbl.className = 'label';
+                    lbl.textContent = (i === 0) ? '' : i; // leave 0° label empty (we show "N")
+                    const labelEl = lbl.cloneNode(true);
+                    labelEl.style.transform = `translate(-50%,-118px) rotate(${-i}deg)`; // keep text upright
+                    const wrap = document.createElement('div');
+                    wrap.style.position = 'absolute';
+                    wrap.style.left = '50%';
+                    wrap.style.top = '50%';
+                    wrap.style.transform = `translate(-50%,-50%) rotate(${i}deg)`;
+                    wrap.appendChild(labelEl);
+                    ticksHost.appendChild(wrap);
+                }
 
-    // Build tick marks
-    (function buildTicks(){
-      const ctn = document.getElementById('ticks');
-      for (let i=0;i<360;i+=10){
-        const t = document.createElement('div');
-        t.className = 'tick' + (i%30===0 ? ' big':'');
-        t.style.transform = `rotate(${i}deg) translate(-50%, 8px)`;
-        ctn.appendChild(t);
-      }
-    })();
+                // Screen orientation angle (portrait 0, landscape 90, etc.)
+                function screenAngle() {
+                    if (screen.orientation && typeof screen.orientation.angle === 'number') {
+                        return screen.orientation.angle;
+                    }
+                    if (typeof window.orientation === 'number') { // iOS legacy
+                        // window.orientation: 0, 90, -90, 180
+                        return (window.orientation + 360) % 360;
+                    }
+                    return 0;
+                }
 
-    function setStatus(msg){ statusEl.textContent = msg; }
-    function fmt(n){ return Number.isFinite(n) ? n.toFixed(1).replace(/\.0$/,'') : '–'; }
-    function cardinal(h){
-      const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-      const idx = Math.round(((h%360)+360)%360 / 22.5) % 16;
-      return dirs[idx];
-    }
-    const norm = d => (d%360+360)%360;
+                // Circular EMA smoothing
+                let ema = null;
+                const SMOOTH = 0.15; // 0.05–0.25 typical
+                function smoothHeading(value) {
+                    if (value == null) return ema;
+                    if (ema == null) { ema = value; return value; }
+                    const delta = (((value - ema) + 540) % 360) - 180; // shortest path around circle
+                    ema = (ema + SMOOTH * delta + 360) % 360;
+                    return ema;
+                }
 
-    // Circular mean helper (handles wrap-around at 0/360)
-    function circularMean(degArray){
-      if (!degArray.length) return null;
-      let x=0, y=0; for (const d of degArray){ const r = d*Math.PI/180; x += Math.cos(r); y += Math.sin(r); }
-      return norm(Math.atan2(y, x) * 180/Math.PI);
-    }
+                function normalize(d) {
+                    d = d % 360;
+                    return d < 0 ? d + 360 : d;
+                }
 
-    // Adaptive smoothing parameters
-    let windowSize = 24;      // samples for circular mean
-    let baseAlpha = 0.08;     // EMA blend (lower = steadier)
-    let deadband = 1.0;       // degrees below which we ignore change
-    let maxRate = 180;        // deg/sec cap to prevent snapping
+                function setStatus(ok, msg, cls='') {
+                    statusEl.innerHTML = `Status: <span class="${cls || (ok ? 'ok' : 'warn')}">${msg}</span>`;
+                }
 
-    // Update from UI
-    function applyUI(){
-      const s = parseFloat(smoothSlider.value); // 0..1; 1 = very smooth
-      smoothVal.textContent = s.toFixed(2);
-      // Map smoothing to parameters
-      windowSize = Math.round(5 + s * 45);            // 5..50
-      baseAlpha  = 0.35 - s * 0.31;                    // 0.35..0.04
-      deadband   = 0 + s * 1.5;                        // 0..1.5°
-      deadbandVal.textContent = deadband.toFixed(1);
-    }
-    applyUI();
-    smoothSlider.addEventListener('input', applyUI);
-    deadbandSlider.addEventListener('input', ()=>{ deadband = parseFloat(deadbandSlider.value); deadbandVal.textContent = deadband.toFixed(1); });
+                function updateUI(heading) {
+                    const h = smoothHeading(heading);
+                    if (typeof h === 'number') {
+                        // Rotate the dial opposite the heading so "N" points to actual north.
+                            dial.style.transform = `rotate(${-h}deg)`;
+                        degEl.textContent = Math.round(h);
+                    }
+                }
 
-    // Buffers
-    const samples = []; // recent headings
-    const maxSamples = 64;
+                function computeHeadingFromEvent(e) {
+                    // iOS Safari provides webkitCompassHeading (0 = North, clockwise)
+                    if (typeof e.webkitCompassHeading === 'number') {
+                        return normalize(e.webkitCompassHeading);
+                    }
+                    // Android Chrome path: event.alpha is z-rotation (0–360)
+                    if (typeof e.alpha === 'number') {
+                        // Heading relative to magnetic north
+                        let hdg = 360 - e.alpha; // convert clockwise from north
+                        // Adjust for screen rotation (portrait vs landscape)
+                        hdg = normalize(hdg + screenAngle());
+                        return hdg;
+                    }
+                    return null;
+                }
 
-    let smoothed = null;
-    let lastTime = performance.now();
+                let listening = false;
+                function startListening() {
+                    if (listening) return;
+                    window.addEventListener('deviceorientation', onOrientation, { passive: true });
+                    listening = true;
+                    setStatus(true, 'listening for heading…');
+                }
 
-    function updateUI(heading, accuracy){
-      rose.style.transform = `rotate(${-heading}deg)`;           // keep N top
-      needle.style.transform = `translate(-50%, -50%) rotate(${heading}deg)`;
-      headingEl.textContent = `${fmt(heading)}° ${cardinal(heading)}`;
-      accEl.textContent = accuracy!=null ? `Accuracy: ±${Math.round(accuracy)}°` : 'Accuracy: –';
-    }
+                function onOrientation(e) {
+                    const heading = computeHeadingFromEvent(e);
+                    if (typeof heading === 'number' && !Number.isNaN(heading)) {
+                        updateUI(heading);
+                    }
+                }
 
-    function screenAngle(){
-      let ang = 0; if (screen.orientation && typeof screen.orientation.angle === 'number') ang = screen.orientation.angle; else if (typeof window.orientation === 'number') ang = window.orientation; return ang||0;
-    }
+                // Permission flow (iOS)
+                async function requestIOSPermissionIfNeeded() {
+                    if (!isIOS) return true;
+                    const fn = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission;
+                    if (typeof fn === 'function') {
+                        try {
+                            const state = await DeviceOrientationEvent.requestPermission();
+                            if (state === 'granted') return true;
+                            setStatus(false, 'motion permission denied', 'err');
+                            return false;
+                        } catch (err) {
+                            setStatus(false, 'motion permission error', 'err');
+                            return false;
+                        }
+                    }
+                    // Older iOS (no requestPermission), try directly
+                    return true;
+                }
 
-    // Motion awareness to loosen smoothing while turning
-    let turningBoost = 0; // 0..1
-    window.addEventListener('devicemotion', (e)=>{
-      const r = e.rotationRate || {}; // deg/s
-      const mag = Math.hypot(r.alpha||0, r.beta||0, r.gamma||0);
-      // Map rotation magnitude to 0..1 within 0..200 deg/s
-      turningBoost = Math.max(0, Math.min(1, mag/200));
-    }, true);
+                enableBtn.addEventListener('click', async () => {
+                    const ok = await requestIOSPermissionIfNeeded();
+                    if (ok) startListening();
+                });
 
-    function computeHeadingFromEvent(e){
-      if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)){
-        const acc = (typeof e.webkitCompassAccuracy === 'number') ? e.webkitCompassAccuracy : null;
-        return { heading: e.webkitCompassHeading, accuracy: acc, source: 'ios' };
-      }
-      if (typeof e.alpha === 'number'){
-        let h = 360 - e.alpha; // yaw -> bearing
-        h -= screenAngle();
-        h = norm(h);
-        return { heading: h, accuracy: null, source: 'generic' };
-      }
-      return { heading: null, accuracy: null };
-    }
+                calibBtn.addEventListener('click', () => {
+                    alert([
+                        'Calibration tips:',
+                        '• Move away from magnets/metal (cases, speakers, cars).',
+                        '• Make a slow “figure-8” with your phone.',
+                        '• Ensure location & motion permissions are allowed.',
+                        '• Keep to one posture (flat or upright) while testing.',
+                    ].join('\n'));
+                });
 
-    function pushSample(h){
-      samples.push(h); while (samples.length > maxSamples) samples.shift();
-    }
+                // Auto-start on Android (no permission prompt required)
+                if (!isIOS) {
+                    startListening();
+                }
 
-    function stabilizedHeading(raw){
-      pushSample(raw);
-      // Use last windowSize samples
-      const arr = samples.slice(-windowSize);
-      const mean = circularMean(arr);
-      if (smoothed==null) return mean;
-      // EMA with wrap handling
-      const now = performance.now();
-      const dt = Math.max(0.001, (now - lastTime)/1000);
-      lastTime = now;
-      const diff = ((mean - smoothed + 540) % 360) - 180; // shortest path
-      const alpha = baseAlpha + turningBoost * 0.25;      // loosen smoothing while turning
-      let next = smoothed + diff * alpha;
-      // Deadband + max rate
-      const maxStep = maxRate * dt; // deg
-      const step = Math.max(-maxStep, Math.min(maxStep, ((next - smoothed + 540)%360)-180));
-      if (Math.abs(step) < deadband) return smoothed; // ignore tiny wobbles
-      return norm(smoothed + step);
-    }
+                // Restart smoothing on orientation change to avoid jumps
+                (screen.orientation || window).addEventListener?.('change', () => { ema = null; });
 
-    let running = false; let rafId = null;
-
-    function onOrientation(e){
-      const { heading, accuracy, source } = computeHeadingFromEvent(e);
-      if (heading==null) return;
-      // If iOS reports very poor accuracy (e.g., > 25°), skip update
-      if (source==='ios' && typeof accuracy==='number' && accuracy>25){
-        qualEl.textContent = 'low'; qualEl.style.color = '#f59e0b';
-        return;
-      }
-      qualEl.textContent = 'ok'; qualEl.style.color = '#90f';
-
-      const h = stabilizedHeading(heading);
-      if (!rafId){
-        rafId = requestAnimationFrame(()=>{ rafId = null; updateUI(h, accuracy); });
-      }
-      smoothed = h;
-    }
-
-    async function start(){
-      try{
-        const needsPerm = typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function';
-        if (needsPerm){
-          const res = await DeviceOrientationEvent.requestPermission();
-          if (res !== 'granted') { setStatus('Motion permission denied'); return; }
-        }
-        window.addEventListener('deviceorientationabsolute', onOrientation, true);
-        window.addEventListener('deviceorientation', onOrientation, true);
-        running = true; setStatus('Compass running');
-      }catch(err){ setStatus('Error starting: '+err.message); }
-    }
-
-    function stop(){
-      window.removeEventListener('deviceorientationabsolute', onOrientation, true);
-      window.removeEventListener('deviceorientation', onOrientation, true);
-      running = false; setStatus('Stopped');
-    }
-
-    document.getElementById('btnStart').addEventListener('click', start);
-    document.getElementById('btnStop').addEventListener('click', stop);
-    document.getElementById('btnCalib').addEventListener('click', ()=>{
-      alert('Calibration tip:
-
-1) Hold the phone flat.
-2) Move it in a gentle figure‑8.
-3) Keep away from magnets/metal.
-4) Ensure Location Services and Motion access are enabled.');
-    });
-
-    // Update on screen rotation
-    (screen.orientation || window).addEventListener?.('change', ()=>{ if (smoothed!=null) updateUI(smoothed, null); });
-
-    // HTTPS hint
-    if (location.protocol !== 'https:' && !['localhost','127.0.0.1'].includes(location.hostname)) setStatus('Open over HTTPS (or localhost) to access motion sensors.');
-  </script>
-</body>
+            })();
+        </script>
+    </body>
 </html>
 
