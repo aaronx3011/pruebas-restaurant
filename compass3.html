@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Flecha Brújula</title>
+  <style>
+    :root{
+      --bg:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .wrap{min-height:100%;display:grid;place-items:center;padding:16px}
+    .col{display:flex;flex-direction:column;align-items:center;gap:18px}
+    /* Flecha: SVG apuntando hacia arriba. Solo rotamos este contenedor. */
+    .arrow-wrap{width:200px;height:200px;display:grid;place-items:center;transition:transform .08s linear}
+    .arrow{width:160px;height:160px;display:block}
+    .deg{font-size:40px;line-height:1;font-variant-numeric:tabular-nums}
+    .unit{color:var(--muted);margin-left:6px}
+    .readout{display:flex;align-items:baseline}
+    /* Estado de espera (antes de permisos en iOS). */
+    .tap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;pointer-events:none}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="col">
+      <div id="arrowWrap" class="arrow-wrap" aria-label="Flecha brújula" role="img" title="Brújula">
+        <!-- Flecha hacia arriba (N). Rotamos el contenedor para apuntar al norte. -->
+        <svg class="arrow" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <!-- sombra suave -->
+          <defs>
+            <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+              <feOffset in="blur" dx="0" dy="2" result="off"/>
+              <feMerge><feMergeNode in="off"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <!-- triángulo apuntando hacia arriba -->
+          <polygon filter="url(#soft)" points="50,6 84,76 50,62 16,76" fill="#38bdf8"/>
+          <!-- pivote -->
+          <circle cx="50" cy="76" r="4" fill="#e5e7eb"/>
+        </svg>
+      </div>
+
+      <div class="readout">
+        <div id="deg" class="deg">—</div><div class="unit">°</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mensaje silencioso (no bloquea) para iOS antes del toque -->
+  <div id="tapHint" class="tap">toca la pantalla una vez en iOS para activar</div>
+
+  <script>
+  (function(){
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const arrowWrap = document.getElementById('arrowWrap');
+    const degEl = document.getElementById('deg');
+    const tapHint = document.getElementById('tapHint');
+
+    // Utilidades
+    function screenAngle(){
+      if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+      if (typeof window.orientation === 'number') return (window.orientation + 360) % 360;
+      return 0;
+    }
+    function normalize(d){ d = d % 360; return d < 0 ? d + 360 : d; }
+
+    // Suavizado circular (evita saltos 359→0)
+    let ema = null; const SMOOTH = 0.15;
+    function smoothHeading(value){
+      if (value == null) return ema;
+      if (ema == null){ ema = value; return value; }
+      const delta = (((value - ema) + 540) % 360) - 180;
+      ema = (ema + SMOOTH * delta + 360) % 360;
+      return ema;
+    }
+
+    // Ajuste por postura: si está bastante erguido en retrato, +90° para que el borde superior apunte al norte.
+    function postureAdjust(h, e){
+      const beta = typeof e.beta === 'number' ? e.beta : 0; // inclinación frontal
+      const ang = screenAngle();
+      const upright = Math.abs(beta) >= 30;
+      if (!upright) return h; // plano sobre mesa → alpha ya sirve
+      if (ang === 0 || ang === 180){ // retrato
+        return normalize(h + 90);
+      }
+      return h;
+    }
+
+    // Cálculo del heading a partir del evento
+    function computeHeadingFromEvent(e){
+      if (typeof e.webkitCompassHeading === 'number'){
+        return normalize(e.webkitCompassHeading); // iOS Safari
+      }
+      if (typeof e.alpha === 'number'){
+        let hdg = 360 - e.alpha;              // convención reloj desde norte
+        hdg = normalize(hdg + screenAngle()); // compensa rotación de pantalla
+        hdg = postureAdjust(hdg, e);          // compensa postura
+        return hdg;
+      }
+      return null;
+    }
+
+    function updateUI(heading){
+      const s = smoothHeading(heading);
+      if (typeof s === 'number'){
+        // Rotamos la flecha inversamente para que APUNTE al norte (flecha originalmente hacia arriba)
+        arrowWrap.style.transform = `rotate(${-s}deg)`;
+        degEl.textContent = Math.round(s);
+      }
+    }
+
+    let listening = false;
+    function startListening(){
+      if (listening) return;
+      const useAbs = 'ondeviceorientationabsolute' in window;
+      (useAbs ? window : window).addEventListener(
+        useAbs ? 'deviceorientationabsolute' : 'deviceorientation',
+        onOrientation, { passive: true }
+      );
+      listening = true;
+      tapHint.classList.add('hidden');
+    }
+
+    function onOrientation(e){
+      const heading = computeHeadingFromEvent(e);
+      if (typeof heading === 'number' && !Number.isNaN(heading)){
+        updateUI(heading);
+      }
+    }
+
+    async function requestIOSPermissionIfNeeded(){
+      if (!isIOS) return true;
+      const fn = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission;
+      if (typeof fn === 'function'){
+        try{
+          const state = await DeviceOrientationEvent.requestPermission();
+          return state === 'granted';
+        }catch{ return false; }
+      }
+      return true; // iOS antiguos
+    }
+
+    // Autoinicio en Android
+    if (!isIOS) startListening();
+
+    // En iOS, primer toque en cualquier parte solicita permiso y arranca
+    let armed = true;
+    window.addEventListener('click', async () => {
+      if (!armed) return;
+      armed = false;
+      const ok = await requestIOSPermissionIfNeeded();
+      if (ok) startListening();
+      else tapHint.textContent = 'permiso de movimiento denegado';
+    }, { once:true });
+
+    // Reinicia suavizado si cambia la orientación de pantalla
+    (screen.orientation || window).addEventListener?.('change', () => { ema = null; });
+  })();
+  </script>
+</body>
+</html>
+
