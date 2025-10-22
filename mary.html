@@ -3,12 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ángulo hacia tu posición</title>
+  <title>Ángulo y Distancia</title>
   <style>
-    :root {
-      --bg: #0f172a;
-      --text: #e5e7eb;
-    }
+    :root { --bg:#0f172a; --text:#e5e7eb; }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
     body {
@@ -17,24 +14,31 @@
       display: grid;
       place-items: center;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial;
-    }
-    .angle {
-      font-size: clamp(64px, 14vw, 160px);
-      line-height: 1;
-      letter-spacing: 0.5px;
-      font-weight: 700;
       text-align: center;
+      padding: 16px;
+    }
+    .wrap { display: grid; gap: 10px; }
+    .big {
+      font-size: clamp(56px, 12vw, 140px);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: .5px;
       user-select: none;
     }
-    .angle small {
-      font-size: 0.35em;
-      opacity: 0.8;
-      margin-left: 0.1em;
+    .sub {
+      font-size: clamp(22px, 5vw, 40px);
+      font-weight: 600;
+      opacity: .9;
+      user-select: none;
     }
+    .unit { opacity: .8; font-weight: 600; }
   </style>
 </head>
 <body>
-  <div class="angle" id="angle">–<small>°</small></div>
+  <div class="wrap">
+    <div class="big" id="angle">–°</div>
+    <div class="sub"><span id="meters">–</span> <span class="unit">m</span></div>
+  </div>
 
   <script>
     // --- Utilidades (firmas intactas) ---
@@ -44,10 +48,15 @@
       if (Number.isFinite(n)) return n.toFixed(digits).replace(/\.0+$/,'');
       return '–';
     }
+    function fmtMeters(m) {
+      if (!Number.isFinite(m)) return '–';
+      try { return new Intl.NumberFormat().format(Math.round(m)); }
+      catch { return String(Math.round(m)); }
+    }
     function toRad(deg){ return deg * Math.PI / 180; }
     function toDeg(rad){ return rad * 180 / Math.PI; }
     function haversine(lat1, lon1, lat2, lon2) {
-      const R = 6371_000;
+      const R = 6371_000; // meters
       const φ1 = toRad(lat1), φ2 = toRad(lat2);
       const Δφ = toRad(lat2 - lat1);
       const Δλ = toRad(lon2 - lon1);
@@ -61,7 +70,7 @@
       const y = Math.sin(λ2-λ1) * Math.cos(φ2);
       const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
       let θ = Math.atan2(y, x) * 180 / Math.PI;
-      return (θ + 360) % 360;
+      return (θ + 360) % 360; // 0..360
     }
     function convertDistance(meters, unit) {
       switch(unit) {
@@ -81,31 +90,28 @@
     const A_LNG = -74.055733;
 
     // --- Geolocalización en vivo ---
-    let watchId = null;
-
     function onPosSuccess(pos) {
       const { latitude, longitude } = pos.coords;
       const brg = initialBearing(A_LAT, A_LNG, latitude, longitude);
-      $('#angle').innerHTML = `${fmtNum(brg, 1)}<small>°</small>`;
+      const dMeters = haversine(A_LAT, A_LNG, latitude, longitude);
+
+      $('#angle').textContent = `${fmtNum(brg, 1)}°`;
+      $('#meters').textContent = fmtMeters(dMeters);
     }
 
     function onPosError(err) {
       console.error(err);
-      $('#angle').innerHTML = `–<small>°</small>`;
+      $('#angle').textContent = '–°';
+      $('#meters').textContent = '–';
     }
 
     const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
 
     (function start(){
       const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-      if (!('geolocation' in navigator)) {
-        console.warn('Geolocation not supported');
-        return;
-      }
-      if (!isHttps) {
-        console.warn('Use HTTPS or localhost for precise location');
-      }
-      watchId = navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
+      if (!('geolocation' in navigator)) return console.warn('Geolocation not supported');
+      if (!isHttps) console.warn('Use HTTPS or localhost for precise location');
+      navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
     })();
   </script>
 </body>
