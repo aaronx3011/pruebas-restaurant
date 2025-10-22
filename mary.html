@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Flecha a Ángulo (Brújula)</title>
   <style>
-    :root{ --bg:#0f172a; --text:#e5e7eb; --muted:#94a3b8; }
+    :root{ --bg:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#38bdf8; --accent-2:#10b981; --disabled:#334155; }
     *{ box-sizing:border-box }
     html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
     .wrap{ min-height:100%; display:grid; place-items:center; padding:16px }
@@ -17,6 +17,20 @@
     .readout{ display:flex; align-items:baseline }
     .tap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; pointer-events:none }
     .hidden{ display:none }
+
+    /* Botón */
+    .btn{
+      appearance:none; border:0; cursor:pointer;
+      padding:12px 18px; border-radius:12px; font-size:16px; font-weight:600;
+      background:linear-gradient(180deg, var(--accent), var(--accent-2)); color:#00131a;
+      box-shadow: 0 8px 24px rgba(16,185,129,.25);
+      transition: transform .08s ease, filter .2s ease, opacity .2s ease;
+    }
+    .btn:active{ transform: translateY(1px) }
+    .btn[disabled]{
+      background: var(--disabled); color:#94a3b8; cursor:not-allowed;
+      box-shadow:none; filter:saturate(.6); opacity:.6;
+    }
   </style>
 </head>
 <body>
@@ -44,6 +58,9 @@
       <div class="readout">
         <div id="meters" class="deg" style="font-size:32px">—</div><div class="unit">m</div>
       </div>
+
+      <!-- Botón condicional (<100 m) -->
+      <button id="goBtn" class="btn" disabled>Ir</button>
     </div>
   </div>
 
@@ -56,6 +73,7 @@
     const arrowWrap = document.getElementById('arrowWrap');
     const degEl = document.getElementById('deg');
     const metersEl = document.getElementById('meters');
+    const goBtn = document.getElementById('goBtn');
     const tapHint = document.getElementById('tapHint');
 
     const toRad = (d)=> d * Math.PI / 180;
@@ -89,10 +107,9 @@
       return emaHeading;
     }
 
-    // ===== Continuidad visual de la flecha (evita giro completo en 0°/360°) =====
+    // ===== Continuidad visual de la flecha =====
     let lastVisual = null;  // último ángulo modular (0..360)
     let cumVisual = 0;      // ángulo acumulado continuo
-
     function renderArrow(absAngle0to360){
       if (lastVisual === null){
         lastVisual = absAngle0to360;
@@ -116,15 +133,20 @@
     function initialBearing(lat1, lon1, lat2, lon2){
       const φ1 = toRad(lat1), φ2 = toRad(lat2);
       const λ1 = toRad(lon1), λ2 = toRad(lon2);
-      const y = Math.sin(λ2-λ1) * stdCos(φ2);
-      const x = stdCos(φ1)*Math.sin(φ2) - Math.sin(φ1)*stdCos(φ2)*Math.cos(λ2-λ1);
+      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
       let θ = Math.atan2(y, x) * 180 / Math.PI;
       return (θ + 360) % 360;
-      function stdCos(v){ return Math.cos(v); }
     }
 
-    let targetBearing = null; // ángulo de tu página (absoluto 0..360)
-    let deviceHeading = null; // heading del teléfono (0..360)
+    let targetBearing = null; // ángulo absoluto 0..360
+    let deviceHeading = null; // heading del teléfono 0..360
+
+    // Actualiza estado del botón según distancia
+    function updateButton(distanceM){
+      const canGo = Number.isFinite(distanceM) && distanceM < 100;
+      goBtn.disabled = !canGo;
+    }
 
     function onPosSuccess(pos){
       const { latitude, longitude } = pos.coords;
@@ -133,9 +155,10 @@
       targetBearing = normalize(360 - initialBearing(A_LAT, A_LNG, latitude, longitude));
       degEl.textContent = Math.round(targetBearing);
 
-      // Distancia en metros (desde donde estoy al punto objetivo A_LAT/A_LNG)
+      // Distancia en metros
       const dist = distanceMeters(latitude, longitude, A_LAT, A_LNG);
       metersEl.textContent = Math.round(dist);
+      updateButton(dist);
 
       updateArrow();
     }
@@ -143,6 +166,7 @@
       console.warn('Geoloc error:', err);
       targetBearing = null;
       metersEl.textContent = '—';
+      updateButton(Infinity);
     }
 
     // ===== Brújula del dispositivo =====
@@ -182,7 +206,7 @@
     function updateArrow(){
       if (targetBearing == null || deviceHeading == null) return;
       const relative = normalize(targetBearing - deviceHeading); // 0..360
-      renderArrow(relative); // continuidad
+      renderArrow(relative);
     }
 
     // ===== Permisos / inicio =====
@@ -227,6 +251,13 @@
     (screen.orientation || window).addEventListener?.('change', ()=>{
       emaHeading = null;
       lastVisual = null;
+    });
+
+    // Acción del botón
+    goBtn.addEventListener('click', ()=>{
+      if (goBtn.disabled) return;
+      // Redirige a Google
+      window.location.href = 'https://www.google.com';
     });
   })();
   </script>
