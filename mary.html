@@ -22,7 +22,6 @@
 <body>
   <div class="wrap">
     <div class="col">
-      <!-- Flecha (apunta hacia el ángulo objetivo) -->
       <div id="arrowWrap" class="arrow-wrap" aria-label="Flecha a ángulo" role="img" title="Flecha a ángulo">
         <svg class="arrow" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
           <defs>
@@ -32,33 +31,28 @@
               <feMerge><feMergeNode in="off"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
           </defs>
-          <!-- Triángulo hacia arriba; rotamos el contenedor para apuntar al objetivo -->
           <polygon filter="url(#soft)" points="50,6 84,76 50,62 16,76" fill="#38bdf8"/>
           <circle cx="50" cy="76" r="4" fill="#e5e7eb"/>
         </svg>
       </div>
 
-      <!-- Solo grados del ángulo objetivo (el que da tu página) -->
       <div class="readout">
         <div id="deg" class="deg">—</div><div class="unit">°</div>
       </div>
     </div>
   </div>
 
-  <!-- Pista iOS -->
   <div id="tapHint" class="tap">toca la pantalla una vez en iOS para activar</div>
 
   <script>
   (function(){
-    // ===== Utilidades generales =====
+    // ===== Utilidades =====
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const arrowWrap = document.getElementById('arrowWrap');
     const degEl = document.getElementById('deg');
     const tapHint = document.getElementById('tapHint');
 
-    const $ = (sel, root=document)=>root.querySelector(sel);
     const toRad = (d)=> d * Math.PI / 180;
-    const toDeg = (r)=> r * 180 / Math.PI;
     const normalize = (d)=> { d = d % 360; return d < 0 ? d + 360 : d; };
 
     function screenAngle(){
@@ -67,7 +61,7 @@
       return 0;
     }
 
-    // Suavizado circular del heading (evita jitter y saltos 359→0)
+    // Suavizado circular del heading
     let emaHeading = null; const SMOOTH = 0.15;
     function smoothHeading(value){
       if (value == null) return emaHeading;
@@ -77,8 +71,24 @@
       return emaHeading;
     }
 
-    // ===== Cálculo del ÁNGULO objetivo (el de tu segunda página) =====
-    // Punto fijo A (igual que tu código):
+    // ===== Continuidad visual de la flecha (evita giro completo en 0°/360°) =====
+    let lastVisual = null;  // último ángulo modular (0..360)
+    let cumVisual = 0;      // ángulo acumulado continuo
+
+    function renderArrow(absAngle0to360){
+      if (lastVisual === null){
+        lastVisual = absAngle0to360;
+        cumVisual = absAngle0to360;
+        arrowWrap.style.transform = `rotate(${cumVisual}deg)`;
+        return;
+      }
+      const delta = (((absAngle0to360 - lastVisual) + 540) % 360) - 180; // -180..+180
+      cumVisual += delta;
+      lastVisual = absAngle0to360;
+      arrowWrap.style.transform = `rotate(${cumVisual}deg)`;
+    }
+
+    // ===== Bearing objetivo (tu ángulo) =====
     const A_LAT = 4.670373;
     const A_LNG = -74.055733;
 
@@ -88,22 +98,17 @@
       const y = Math.sin(λ2-λ1) * Math.cos(φ2);
       const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
       let θ = Math.atan2(y, x) * 180 / Math.PI;
-      return (θ + 360) % 360; // 0..360
+      return (θ + 360) % 360;
     }
 
-    // Estado
-    let targetBearing = null; // "ángulo que da tu página" (brg absoluto respecto al norte)
-    let deviceHeading = null; // heading del teléfono respecto al norte (0=N, clockwise)
+    let targetBearing = null; // ángulo de tu página (absoluto 0..360)
+    let deviceHeading = null; // heading del teléfono (0..360)
 
-    // Geo en vivo → actualiza targetBearing
     function onPosSuccess(pos){
       const { latitude, longitude } = pos.coords;
-      // Nota: tu página calcula el bearing desde A → POS ACTUAL.
-      // Si prefieres desde POS → A, invierte los argumentos.
+      // Usas la variante 360 - bearing:
       targetBearing = normalize(360 - initialBearing(A_LAT, A_LNG, latitude, longitude));
-
-      // targetBearing = initialBearing(A_LAT, A_LNG, latitude, longitude);
-      degEl.textContent = Math.round(targetBearing); // Mostramos el ángulo objetivo (tu “brg”)
+      degEl.textContent = Math.round(targetBearing);
       updateArrow();
     }
     function onPosError(err){
@@ -113,10 +118,10 @@
 
     // ===== Brújula del dispositivo =====
     function postureAdjust(h, e){
-      const beta = typeof e.beta === 'number' ? e.beta : 0; // inclinación frontal
+      const beta = typeof e.beta === 'number' ? e.beta : 0;
       const ang = screenAngle();
       const upright = Math.abs(beta) >= 30;
-      if (!upright) return h; // plano sobre mesa → alpha sirve
+      if (!upright) return h;
       if (ang === 0 || ang === 180){ // retrato
         return normalize(h + 90);
       }
@@ -128,9 +133,9 @@
         return normalize(e.webkitCompassHeading);
       }
       if (typeof e.alpha === 'number'){
-        let hdg = 360 - e.alpha;              // 0=N, horario
-        hdg = normalize(hdg + screenAngle()); // compensa rotación de pantalla
-        hdg = postureAdjust(hdg, e);          // compensa postura (erguido)
+        let hdg = 360 - e.alpha;
+        hdg = normalize(hdg + screenAngle());
+        hdg = postureAdjust(hdg, e);
         return hdg;
       }
       return null;
@@ -145,14 +150,10 @@
     }
 
     // ===== Vinculación flecha =====
-    // Queremos que la flecha apunte visualmente al ÁNGULO objetivo (brg) en el mundo real.
-    // Para lograrlo en pantalla, usamos el heading del dispositivo:
-    //   ángulo relativo = (brg - heading)
-    //   rotación CSS    = -ángulo relativo
     function updateArrow(){
       if (targetBearing == null || deviceHeading == null) return;
-      const relative = normalize(targetBearing - deviceHeading);
-      arrowWrap.style.transform = `rotate(${relative}deg)`;
+      const relative = normalize(targetBearing - deviceHeading); // 0..360
+      renderArrow(relative); // continuidad (en vez de rotar directo)
     }
 
     // ===== Permisos / inicio =====
@@ -181,10 +182,10 @@
       navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
     })();
 
-    // Android: arranca sin tocar
+    // Android arranca solo
     if (!isIOS) startHeading();
 
-    // iOS: requiere toque
+    // iOS requiere toque
     let armed = true;
     window.addEventListener('click', async ()=>{
       if (!armed) return;
@@ -193,8 +194,11 @@
       if (ok) startHeading(); else tapHint.textContent = 'permiso de movimiento denegado';
     }, { once:true });
 
-    // Reset suavizado al cambiar orientación de pantalla
-    (screen.orientation || window).addEventListener?.('change', ()=>{ emaHeading = null; });
+    // Reset de suavizado y continuidad al rotar pantalla
+    (screen.orientation || window).addEventListener?.('change', ()=>{
+      emaHeading = null;
+      lastVisual = null;
+    });
   })();
   </script>
 </body>
