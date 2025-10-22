@@ -18,7 +18,7 @@
     .deg{ font-size:40px; line-height:1; font-variant-numeric:tabular-nums }
     .unit{ color:var(--muted); margin-left:6px }
     .readout{ display:flex; align-items:baseline }
-    .tap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; pointer-events:none }
+    .tap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; background:rgba(15,23,42,.4); backdrop-filter: blur(4px); }
     .hidden{ display:none }
 
     .btn{
@@ -34,7 +34,6 @@
     .status{ font-size:12px; color:var(--muted); text-align:center; max-width:320px }
     .status b{ color:var(--text) }
 
-    /* Panel debug (oculto por defecto) */
     .debug{
       display:none; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size:12px; color:#cbd5e1; background:#0b1220; border:1px solid #1f2937;
@@ -78,28 +77,41 @@
     </div>
   </div>
 
-  <div id="tapHint" class="tap">toca la pantalla una vez en iOS para activar</div>
+  <!-- Overlay para pedir permisos en iOS -->
+  <div id="tapHint" class="tap hidden">
+    <div style="display:flex; flex-direction:column; gap:10px; align-items:center;">
+      <div>Para activar la brújula en iPhone/iPad toca “Activar”.</div>
+      <button id="activateBtn" class="btn">Activar</button>
+      <div style="font-size:12px; color:#cbd5e1;">Tip: usa HTTPS para mejor precisión.</div>
+    </div>
+  </div>
 
   <script>
   (function(){
     // ================= CONFIG =================
-    // Punto objetivo:
     const A_LAT = 25.845152;
     const A_LNG = -80.368469;
-
-    // Ajuste manual de declinación (grados). Si notas un sesgo constante, prueba +/- 2..10.
-    // Ej.: en gran parte de Colombia el ajuste puede rondar -6 a -10. Déjalo en 0 si no es necesario.
     const DECLINATION_OFFSET = 0;
 
     // ================= UTILIDADES =================
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // Detección robusta de iOS/iPadOS (incluye iPad "como Mac")
+    const isiOSFamily =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    // ¿Requiere permisos explícitos? (iOS 13+)
+    const needsPermission =
+      (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') ||
+      (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function');
+
     const arrowWrap = document.getElementById('arrowWrap');
     const degEl = document.getElementById('deg');
     const metersEl = document.getElementById('meters');
     const goBtn = document.getElementById('goBtn');
-    const tapHint = document.getElementById('tapHint');
     const statusEl = document.getElementById('status');
     const debugEl = document.getElementById('debug');
+    const tapHint = document.getElementById('tapHint');
+    const activateBtn = document.getElementById('activateBtn');
 
     const toRad = (d)=> d * Math.PI / 180;
     const toDeg = (r)=> r * 180 / Math.PI;
@@ -123,7 +135,6 @@
     }
 
     function initialBearing(lat1, lon1, lat2, lon2){
-      // OJO: bearing DESDE (lat1,lon1) HACIA (lat2,lon2)
       const φ1 = toRad(lat1), φ2 = toRad(lat2);
       const Δλ = toRad(lon2 - lon1);
       const y = Math.sin(Δλ) * Math.cos(φ2);
@@ -157,10 +168,10 @@
     }
 
     // ================= ESTADO =================
-    let deviceHeading = null;    // 0..360 (azimut del teléfono)
-    let targetBearing = null;    // 0..360 (rumbo desde tu posición al punto)
+    let deviceHeading = null;
+    let targetBearing = null;
     let lastFix = { lat:null, lng:null, dist:null };
-    let headingSource = 'idle';  // 'absolute', 'webkit', 'alpha', 'none'
+    let headingSource = 'idle';
 
     function setStatus(msg){ statusEl.innerHTML = msg; }
 
@@ -200,10 +211,8 @@
       const { latitude, longitude, accuracy } = pos.coords;
       lastFix.lat = latitude; lastFix.lng = longitude;
 
-      // Bearing CORRECTO: desde tu posición → objetivo
       targetBearing = initialBearing(latitude, longitude, A_LAT, A_LNG);
 
-      // Distancia
       const dist = distanceMeters(latitude, longitude, A_LAT, A_LNG);
       lastFix.dist = dist;
       metersEl.textContent = Math.round(dist);
@@ -211,7 +220,6 @@
 
       degEl.textContent = targetBearing != null ? Math.round(targetBearing) : '—';
 
-      // Info de precisión (si la geo es muy imprecisa, avisa)
       if (typeof accuracy === 'number' && accuracy > 50){
         setStatus(`Precisión GPS baja (~${Math.round(accuracy)} m). Muévete o espera mejor señal.`);
       } else {
@@ -231,31 +239,26 @@
 
     // ================= HEADING =================
     function postureAdjust(h, e){
-      // Si el teléfono está vertical (beta lejos de 0), aplicamos compensación para retrato
       const beta = typeof e?.beta === 'number' ? e.beta : 0;
       const ang = screenAngle();
-      const upright = Math.abs(beta) >= 30; // vertical
+      const upright = Math.abs(beta) >= 30;
       if (!upright) return h;
-      // En retrato estándar (0 o 180) el "frente" mira por el lado corto
       if (ang === 0 || ang === 180) return normalize(h + 90);
       return h;
     }
 
     function computeHeadingFromEvent(e){
-      // iOS: webkitCompassHeading (típicamente magnético). Aplicamos offset si lo deseas.
       if (typeof e.webkitCompassHeading === 'number'){
         headingSource = 'webkit';
         return normalize(e.webkitCompassHeading + DECLINATION_OFFSET);
       }
-      // Chrome/Android: si es absoluto, alpha suele estar referenciado al marco terrestre
       if (e.absolute === true && typeof e.alpha === 'number'){
         headingSource = 'absolute';
-        let hdg = 360 - e.alpha;                // convención CW desde Norte
-        hdg = normalize(hdg + screenAngle());   // compensa rotación UI
-        hdg = postureAdjust(hdg, e);            // compensa teléfono vertical
+        let hdg = 360 - e.alpha;
+        hdg = normalize(hdg + screenAngle());
+        hdg = postureAdjust(hdg, e);
         return hdg;
       }
-      // Fallback relativo (menos confiable)
       if (typeof e.alpha === 'number'){
         headingSource = 'alpha';
         let hdg = 360 - e.alpha;
@@ -273,7 +276,6 @@
         deviceHeading = smoothHeading(h);
         updateArrow();
       }
-      // Avisos de iOS: exactitud magnética alta => ok; alta cifra = mala.
       if (typeof e.webkitCompassAccuracy === 'number'){
         if (e.webkitCompassAccuracy > 20){
           setStatus('Precisión de brújula baja. Mueve el teléfono en forma de 8 para calibrar.');
@@ -289,31 +291,48 @@
     }
 
     // ================= PERMISOS / INICIO =================
-    async function requestIOSPermissionIfNeeded(){
-      if (!isIOS) return true;
-      const fn = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission;
-      if (typeof fn === 'function'){
-        try { return (await fn()) === 'granted'; }
-        catch { return false; }
-      }
-      return true;
-    }
-
     function startHeading(){
       const useAbs = 'ondeviceorientationabsolute' in window;
       window.addEventListener(useAbs ? 'deviceorientationabsolute' : 'deviceorientation', onOrientation, { passive:true });
-      tapHint.classList.add('hidden');
     }
 
-    if (!isIOS) startHeading(); // Android/desktop arranca solo
+    async function requestAllPermissions(){
+      let granted = true;
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function'){
+        try {
+          const res = await DeviceMotionEvent.requestPermission();
+          granted = granted && (res === 'granted');
+        } catch(e){ granted = false; }
+      }
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function'){
+        try {
+          const res = await DeviceOrientationEvent.requestPermission();
+          granted = granted && (res === 'granted');
+        } catch(e){ granted = false; }
+      }
+      return granted;
+    }
 
-    let armed = true;
-    window.addEventListener('click', async ()=>{
-      if (!armed) return;
-      armed = false;
-      const ok = await requestIOSPermissionIfNeeded();
-      if (ok) startHeading(); else tapHint.textContent = 'permiso de movimiento denegado';
-    }, { once:true });
+    async function armIOSIfNeeded(){
+      // Si se requiere permiso (iOS 13+), mostramos overlay y pedimos con botón
+      if (needsPermission){
+        tapHint.classList.remove('hidden');
+        activateBtn.addEventListener('click', async ()=>{
+          const ok = await requestAllPermissions();
+          if (ok){
+            startHeading();
+            tapHint.classList.add('hidden');
+          } else {
+            tapHint.querySelector('div').firstChild.textContent = 'Permiso denegado. Ve a Configuración > Safari para permitir Movimiento/Orientación.';
+          }
+        }, { once:true });
+      } else {
+        // No requiere permiso explícito; empezamos de una vez
+        startHeading();
+      }
+    }
+
+    armIOSIfNeeded();
 
     (screen.orientation || window).addEventListener?.('change', ()=>{
       emaHeading = null;
