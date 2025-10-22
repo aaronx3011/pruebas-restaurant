@@ -1,201 +1,200 @@
 <!DOCTYPE html>
 <html lang="es">
-    <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <title>Flecha a Ángulo (Brújula)</title>
-        <style>
-:root{ --bg:#0f172a; --text:#e5e7eb; --muted:#94a3b8; }
-*{ box-sizing:border-box }
-html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
-.wrap{ min-height:100%; display:grid; place-items:center; padding:16px }
-.col{ display:flex; flex-direction:column; align-items:center; gap:18px }
-.arrow-wrap{ width:200px; height:200px; display:grid; place-items:center; transition:transform .08s linear }
-.arrow{ width:160px; height:160px; display:block }
-.deg{ font-size:40px; line-height:1; font-variant-numeric:tabular-nums }
-.unit{ color:var(--muted); margin-left:6px }
-.readout{ display:flex; align-items:baseline }
-.tap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; pointer-events:none }
-.hidden{ display:none }
-        </style>
-    </head>
-    <body>
-        <div class="wrap">
-            <div class="col">
-                <!-- Flecha (apunta hacia el ángulo objetivo) -->
-                <div id="arrowWrap" class="arrow-wrap" aria-label="Flecha a ángulo" role="img" title="Flecha a ángulo">
-                    <svg class="arrow" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                        <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
-                        <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
-                        <feOffset in="blur" dx="0" dy="2" result="off"/>
-                        <feMerge><feMergeNode in="off"/><feMergeNode in="SourceGraphic"/></feMerge>
-                        </filter>
-                        </defs>
-                        <!-- Triángulo hacia arriba; rotamos el contenedor para apuntar al objetivo -->
-                        <polygon filter="url(#soft)" points="50,6 84,76 50,62 16,76" fill="#38bdf8"/>
-                        <circle cx="50" cy="76" r="4" fill="#e5e7eb"/>
-                    </svg>
-                </div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Flecha a Ángulo (Brújula)</title>
+  <style>
+    :root{ --bg:#0f172a; --text:#e5e7eb; --muted:#94a3b8; }
+    *{ box-sizing:border-box }
+    html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
+    .wrap{ min-height:100%; display:grid; place-items:center; padding:16px }
+    .col{ display:flex; flex-direction:column; align-items:center; gap:18px }
+    .arrow-wrap{ width:200px; height:200px; display:grid; place-items:center; transition:transform .08s linear }
+    .arrow{ width:160px; height:160px; display:block }
+    .deg{ font-size:40px; line-height:1; font-variant-numeric:tabular-nums }
+    .unit{ color:var(--muted); margin-left:6px }
+    .readout{ display:flex; align-items:baseline }
+    .tap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; pointer-events:none }
+    .hidden{ display:none }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="col">
+      <!-- Flecha (apunta hacia el ángulo objetivo) -->
+      <div id="arrowWrap" class="arrow-wrap" aria-label="Flecha a ángulo" role="img" title="Flecha a ángulo">
+        <svg class="arrow" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+              <feOffset in="blur" dx="0" dy="2" result="off"/>
+              <feMerge><feMergeNode in="off"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <!-- Triángulo hacia arriba; rotamos el contenedor para apuntar al objetivo -->
+          <polygon filter="url(#soft)" points="50,6 84,76 50,62 16,76" fill="#38bdf8"/>
+          <circle cx="50" cy="76" r="4" fill="#e5e7eb"/>
+        </svg>
+      </div>
 
-                <!-- Solo grados del ángulo objetivo (el que da tu página) -->
-                <div class="readout">
-                    <div id="deg" class="deg">—</div><div class="unit">°</div>
-                </div>
-            </div>
-        </div>
+      <!-- Solo grados del ángulo objetivo (el que da tu página) -->
+      <div class="readout">
+        <div id="deg" class="deg">—</div><div class="unit">°</div>
+      </div>
+    </div>
+  </div>
 
-        <!-- Pista iOS -->
-        <div id="tapHint" class="tap">toca la pantalla una vez en iOS para activar</div>
+  <!-- Pista iOS -->
+  <div id="tapHint" class="tap">toca la pantalla una vez en iOS para activar</div>
 
-        <script>
-            (function(){
-                // ===== Utilidades generales =====
-                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-                const arrowWrap = document.getElementById('arrowWrap');
-                const degEl = document.getElementById('deg');
-                const tapHint = document.getElementById('tapHint');
+  <script>
+  (function(){
+    // ===== Utilidades generales =====
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const arrowWrap = document.getElementById('arrowWrap');
+    const degEl = document.getElementById('deg');
+    const tapHint = document.getElementById('tapHint');
 
-                const $ = (sel, root=document)=>root.querySelector(sel);
-                const toRad = (d)=> d * Math.PI / 180;
-                const toDeg = (r)=> r * 180 / Math.PI;
-                const normalize = (d)=> { d = d % 360; return d < 0 ? d + 360 : d; };
+    const $ = (sel, root=document)=>root.querySelector(sel);
+    const toRad = (d)=> d * Math.PI / 180;
+    const toDeg = (r)=> r * 180 / Math.PI;
+    const normalize = (d)=> { d = d % 360; return d < 0 ? d + 360 : d; };
 
-                function screenAngle(){
-                    if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
-                    if (typeof window.orientation === 'number') return (window.orientation + 360) % 360;
-                    return 0;
-                }
+    function screenAngle(){
+      if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
+      if (typeof window.orientation === 'number') return (window.orientation + 360) % 360;
+      return 0;
+    }
 
-                // Suavizado circular del heading (evita jitter y saltos 359→0)
-                let emaHeading = null; const SMOOTH = 0.15;
-                function smoothHeading(value){
-                    if (value == null) return emaHeading;
-                    if (emaHeading == null){ emaHeading = value; return value; }
-                    const delta = (((value - emaHeading) + 540) % 360) - 180;
-                    emaHeading = (emaHeading + SMOOTH * delta + 360) % 360;
-                    return emaHeading;
-                }
+    // Suavizado circular del heading (evita jitter y saltos 359→0)
+    let emaHeading = null; const SMOOTH = 0.15;
+    function smoothHeading(value){
+      if (value == null) return emaHeading;
+      if (emaHeading == null){ emaHeading = value; return value; }
+      const delta = (((value - emaHeading) + 540) % 360) - 180;
+      emaHeading = (emaHeading + SMOOTH * delta + 360) % 360;
+      return emaHeading;
+    }
 
-                // ===== Cálculo del ÁNGULO objetivo (el de tu segunda página) =====
-                    // Punto fijo A (igual que tu código):
-                const A_LAT = 4.670373;
-                const A_LNG = -74.055733;
+    // ===== Cálculo del ÁNGULO objetivo (el de tu segunda página) =====
+    // Punto fijo A (igual que tu código):
+    const A_LAT = 4.670373;
+    const A_LNG = -74.055733;
 
-                function initialBearing(lat1, lon1, lat2, lon2){
-                    const φ1 = toRad(lat1), φ2 = toRad(lat2);
-                    const λ1 = toRad(lon1), λ2 = toRad(lon2);
-                    const y = Math.sin(λ2-λ1) * Math.cos(φ2);
-                    const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
-                    let θ = Math.atan2(y, x) * 180 / Math.PI;
-                    return (θ + 360) % 360; // 0..360
-                }
+    function initialBearing(lat1, lon1, lat2, lon2){
+      const φ1 = toRad(lat1), φ2 = toRad(lat2);
+      const λ1 = toRad(lon1), λ2 = toRad(lon2);
+      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
+      let θ = Math.atan2(y, x) * 180 / Math.PI;
+      return (θ + 360) % 360; // 0..360
+    }
 
-                // Estado
-                let targetBearing = null; // "ángulo que da tu página" (brg absoluto respecto al norte)
-                let deviceHeading = null; // heading del teléfono respecto al norte (0=N, clockwise)
+    // Estado
+    let targetBearing = null; // "ángulo que da tu página" (brg absoluto respecto al norte)
+    let deviceHeading = null; // heading del teléfono respecto al norte (0=N, clockwise)
 
-                // Geo en vivo → actualiza targetBearing
-                function onPosSuccess(pos){
-                    const { latitude, longitude } = pos.coords;
-                    // Nota: tu página calcula el bearing desde A → POS ACTUAL.
-                        // Si prefieres desde POS → A, invierte los argumentos.
-                        // targetBearing = initialBearing(A_LAT, A_LNG, latitude, longitude);
-                    targetBearing = normalize(360 - initialBearing(A_LAT, A_LNG, latitude, longitude));
-                    degEl.textContent = Math.round(targetBearing); // Mostramos el ángulo objetivo (tu “brg”)
-                    updateArrow();
-                }
-                function onPosError(err){
-                    console.warn('Geoloc error:', err);
-                    targetBearing = null;
-                }
+    // Geo en vivo → actualiza targetBearing
+    function onPosSuccess(pos){
+      const { latitude, longitude } = pos.coords;
+      // Nota: tu página calcula el bearing desde A → POS ACTUAL.
+      // Si prefieres desde POS → A, invierte los argumentos.
+      targetBearing = initialBearing(A_LAT, A_LNG, latitude, longitude);
+      degEl.textContent = Math.round(targetBearing); // Mostramos el ángulo objetivo (tu “brg”)
+      updateArrow();
+    }
+    function onPosError(err){
+      console.warn('Geoloc error:', err);
+      targetBearing = null;
+    }
 
-                // ===== Brújula del dispositivo =====
-                    function postureAdjust(h, e){
-                        const beta = typeof e.beta === 'number' ? e.beta : 0; // inclinación frontal
-                        const ang = screenAngle();
-                        const upright = Math.abs(beta) >= 30;
-                        if (!upright) return h; // plano sobre mesa → alpha sirve
-                        if (ang === 0 || ang === 180){ // retrato
-                            return normalize(h + 90);
-                        }
-                        return h;
-                    }
+    // ===== Brújula del dispositivo =====
+    function postureAdjust(h, e){
+      const beta = typeof e.beta === 'number' ? e.beta : 0; // inclinación frontal
+      const ang = screenAngle();
+      const upright = Math.abs(beta) >= 30;
+      if (!upright) return h; // plano sobre mesa → alpha sirve
+      if (ang === 0 || ang === 180){ // retrato
+        return normalize(h + 90);
+      }
+      return h;
+    }
 
-                function computeHeadingFromEvent(e){
-                    if (typeof e.webkitCompassHeading === 'number'){
-                        return normalize(e.webkitCompassHeading);
-                    }
-                    if (typeof e.alpha === 'number'){
-                        let hdg = 360 - e.alpha;              // 0=N, horario
-                        hdg = normalize(hdg + screenAngle()); // compensa rotación de pantalla
-                        hdg = postureAdjust(hdg, e);          // compensa postura (erguido)
-                        return hdg;
-                    }
-                    return null;
-                }
+    function computeHeadingFromEvent(e){
+      if (typeof e.webkitCompassHeading === 'number'){
+        return normalize(e.webkitCompassHeading);
+      }
+      if (typeof e.alpha === 'number'){
+        let hdg = 360 - e.alpha;              // 0=N, horario
+        hdg = normalize(hdg + screenAngle()); // compensa rotación de pantalla
+        hdg = postureAdjust(hdg, e);          // compensa postura (erguido)
+        return hdg;
+      }
+      return null;
+    }
 
-                function onOrientation(e){
-                    const h = computeHeadingFromEvent(e);
-                    if (typeof h === 'number'){
-                        deviceHeading = smoothHeading(h);
-                        updateArrow();
-                    }
-                }
+    function onOrientation(e){
+      const h = computeHeadingFromEvent(e);
+      if (typeof h === 'number'){
+        deviceHeading = smoothHeading(h);
+        updateArrow();
+      }
+    }
 
-                // ===== Vinculación flecha =====
-                    // Queremos que la flecha apunte visualmente al ÁNGULO objetivo (brg) en el mundo real.
-                    // Para lograrlo en pantalla, usamos el heading del dispositivo:
-                //   ángulo relativo = (brg - heading)
-                //   rotación CSS    = -ángulo relativo
-                function updateArrow(){
-                    if (targetBearing == null || deviceHeading == null) return;
-                    const relative = normalize(targetBearing - deviceHeading);
-                    arrowWrap.style.transform = `rotate(${-relative}deg)`;
-                }
+    // ===== Vinculación flecha =====
+    // Queremos que la flecha apunte visualmente al ÁNGULO objetivo (brg) en el mundo real.
+    // Para lograrlo en pantalla, usamos el heading del dispositivo:
+    //   ángulo relativo = (brg - heading)
+    //   rotación CSS    = -ángulo relativo
+    function updateArrow(){
+      if (targetBearing == null || deviceHeading == null) return;
+      const relative = normalize(targetBearing - deviceHeading);
+      arrowWrap.style.transform = `rotate(${-relative}deg)`;
+    }
 
-                // ===== Permisos / inicio =====
-                    async function requestIOSPermissionIfNeeded(){
-                        if (!isIOS) return true;
-                        const fn = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission;
-                        if (typeof fn === 'function'){
-                            try { return (await fn()) === 'granted'; }
-                            catch { return false; }
-                        }
-                        return true;
-                    }
+    // ===== Permisos / inicio =====
+    async function requestIOSPermissionIfNeeded(){
+      if (!isIOS) return true;
+      const fn = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission;
+      if (typeof fn === 'function'){
+        try { return (await fn()) === 'granted'; }
+        catch { return false; }
+      }
+      return true;
+    }
 
-                function startHeading(){
-                    const useAbs = 'ondeviceorientationabsolute' in window;
-                    window.addEventListener(useAbs ? 'deviceorientationabsolute' : 'deviceorientation', onOrientation, { passive:true });
-                    tapHint.classList.add('hidden');
-                }
+    function startHeading(){
+      const useAbs = 'ondeviceorientationabsolute' in window;
+      window.addEventListener(useAbs ? 'deviceorientationabsolute' : 'deviceorientation', onOrientation, { passive:true });
+      tapHint.classList.add('hidden');
+    }
 
-                // Geo
-                const geoOpts = { enableHighAccuracy:true, timeout:10000, maximumAge:0 };
-                (function startGeo(){
-                    const isHttps = location.protocol === 'https:' || ['localhost','127.0.0.1'].includes(location.hostname);
-                    if (!('geolocation' in navigator)) { console.warn('Sin geolocalización'); return; }
-                    if (!isHttps) console.warn('Usa HTTPS o localhost para mayor precisión');
-                    navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
-                })();
+    // Geo
+    const geoOpts = { enableHighAccuracy:true, timeout:10000, maximumAge:0 };
+    (function startGeo(){
+      const isHttps = location.protocol === 'https:' || ['localhost','127.0.0.1'].includes(location.hostname);
+      if (!('geolocation' in navigator)) { console.warn('Sin geolocalización'); return; }
+      if (!isHttps) console.warn('Usa HTTPS o localhost para mayor precisión');
+      navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
+    })();
 
-                // Android: arranca sin tocar
-                if (!isIOS) startHeading();
+    // Android: arranca sin tocar
+    if (!isIOS) startHeading();
 
-                // iOS: requiere toque
-                let armed = true;
-                window.addEventListener('click', async ()=>{
-                    if (!armed) return;
-                    armed = false;
-                    const ok = await requestIOSPermissionIfNeeded();
-                    if (ok) startHeading(); else tapHint.textContent = 'permiso de movimiento denegado';
-                }, { once:true });
+    // iOS: requiere toque
+    let armed = true;
+    window.addEventListener('click', async ()=>{
+      if (!armed) return;
+      armed = false;
+      const ok = await requestIOSPermissionIfNeeded();
+      if (ok) startHeading(); else tapHint.textContent = 'permiso de movimiento denegado';
+    }, { once:true });
 
-                // Reset suavizado al cambiar orientación de pantalla
-                (screen.orientation || window).addEventListener?.('change', ()=>{ emaHeading = null; });
-            })();
-        </script>
-    </body>
+    // Reset suavizado al cambiar orientación de pantalla
+    (screen.orientation || window).addEventListener?.('change', ()=>{ emaHeading = null; });
+  })();
+  </script>
+</body>
 </html>
 
