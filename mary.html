@@ -150,7 +150,7 @@
     function updateArrow(){
       if (targetBearing == null || deviceHeading == null) return;
       const relative = normalize(targetBearing - deviceHeading);
-      arrowWrap.style.transform = `rotate(${-relative}deg)`;
+      arrowWrap.style.transform = `rotate(${relative}deg)`;
     }
 
     // ===== Permisos / inicio =====
