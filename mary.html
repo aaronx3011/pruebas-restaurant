@@ -36,8 +36,13 @@
         </svg>
       </div>
 
+      <!-- Ángulo -->
       <div class="readout">
         <div id="deg" class="deg">—</div><div class="unit">°</div>
+      </div>
+      <!-- Distancia en metros -->
+      <div class="readout">
+        <div id="meters" class="deg" style="font-size:32px">—</div><div class="unit">m</div>
       </div>
     </div>
   </div>
@@ -50,6 +55,7 @@
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const arrowWrap = document.getElementById('arrowWrap');
     const degEl = document.getElementById('deg');
+    const metersEl = document.getElementById('meters');
     const tapHint = document.getElementById('tapHint');
 
     const toRad = (d)=> d * Math.PI / 180;
@@ -59,6 +65,18 @@
       if (screen.orientation && typeof screen.orientation.angle === 'number') return screen.orientation.angle;
       if (typeof window.orientation === 'number') return (window.orientation + 360) % 360;
       return 0;
+    }
+
+    // Distancia Haversine (metros)
+    function distanceMeters(lat1, lon1, lat2, lon2){
+      const R = 6371000; // m
+      const dφ = toRad(lat2 - lat1);
+      const dλ = toRad(lon2 - lon1);
+      const φ1 = toRad(lat1);
+      const φ2 = toRad(lat2);
+      const a = Math.sin(dφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(dλ/2)**2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
     }
 
     // Suavizado circular del heading
@@ -88,24 +106,21 @@
       arrowWrap.style.transform = `rotate(${cumVisual}deg)`;
     }
 
-    // ===== Bearing objetivo (tu ángulo) =====
-        
-          // --- carulla zona T ---
-    // const A_LAT = 4.670373;
+    // ===== Punto objetivo =====
+    // const A_LAT = 4.670373; // carulla zona T (ejemplo anterior)
     // const A_LNG = -74.055733;
 
     const A_LAT = 4.677024;
     const A_LNG = -74.064323;
-      
-
 
     function initialBearing(lat1, lon1, lat2, lon2){
       const φ1 = toRad(lat1), φ2 = toRad(lat2);
       const λ1 = toRad(lon1), λ2 = toRad(lon2);
-      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
-      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
+      const y = Math.sin(λ2-λ1) * stdCos(φ2);
+      const x = stdCos(φ1)*Math.sin(φ2) - Math.sin(φ1)*stdCos(φ2)*Math.cos(λ2-λ1);
       let θ = Math.atan2(y, x) * 180 / Math.PI;
       return (θ + 360) % 360;
+      function stdCos(v){ return Math.cos(v); }
     }
 
     let targetBearing = null; // ángulo de tu página (absoluto 0..360)
@@ -113,14 +128,21 @@
 
     function onPosSuccess(pos){
       const { latitude, longitude } = pos.coords;
-      // Usas la variante 360 - bearing:
+
+      // Bearing (mantengo tu convención actual)
       targetBearing = normalize(360 - initialBearing(A_LAT, A_LNG, latitude, longitude));
       degEl.textContent = Math.round(targetBearing);
+
+      // Distancia en metros (desde donde estoy al punto objetivo A_LAT/A_LNG)
+      const dist = distanceMeters(latitude, longitude, A_LAT, A_LNG);
+      metersEl.textContent = Math.round(dist);
+
       updateArrow();
     }
     function onPosError(err){
       console.warn('Geoloc error:', err);
       targetBearing = null;
+      metersEl.textContent = '—';
     }
 
     // ===== Brújula del dispositivo =====
@@ -160,7 +182,7 @@
     function updateArrow(){
       if (targetBearing == null || deviceHeading == null) return;
       const relative = normalize(targetBearing - deviceHeading); // 0..360
-      renderArrow(relative); // continuidad (en vez de rotar directo)
+      renderArrow(relative); // continuidad
     }
 
     // ===== Permisos / inicio =====
