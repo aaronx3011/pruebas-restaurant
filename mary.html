@@ -100,7 +100,9 @@
       const { latitude, longitude } = pos.coords;
       // Nota: tu página calcula el bearing desde A → POS ACTUAL.
       // Si prefieres desde POS → A, invierte los argumentos.
-      targetBearing = initialBearing(A_LAT, A_LNG, latitude, longitude);
+      targetBearing = normalize(360 - initialBearing(A_LAT, A_LNG, latitude, longitude));
+
+      // targetBearing = initialBearing(A_LAT, A_LNG, latitude, longitude);
       degEl.textContent = Math.round(targetBearing); // Mostramos el ángulo objetivo (tu “brg”)
       updateArrow();
     }
