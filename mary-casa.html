@@ -176,7 +176,7 @@
     function setStatus(msg){ statusEl.innerHTML = msg; }
 
     function updateButton(distanceM){
-      const canGo = Number.isFinite(distanceM) && distanceM < 100;
+      const canGo = Number.isFinite(distanceM) && distanceM < 50;
       goBtn.disabled = !canGo;
     }
 
