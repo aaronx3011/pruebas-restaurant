@@ -3,9 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Flecha a Ángulo (Brújula)</title>
+  <title>Brújula hacia Punto (Ángulo + Distancia)</title>
   <style>
-    :root{ --bg:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#38bdf8; --accent-2:#10b981; --disabled:#334155; }
+    :root{
+      --bg:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
+      --accent:#38bdf8; --accent-2:#10b981; --disabled:#334155; --warn:#f59e0b;
+    }
     *{ box-sizing:border-box }
     html,body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
     .wrap{ min-height:100%; display:grid; place-items:center; padding:16px }
@@ -18,7 +21,6 @@
     .tap{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:14px; pointer-events:none }
     .hidden{ display:none }
 
-    /* Botón */
     .btn{
       appearance:none; border:0; cursor:pointer;
       padding:12px 18px; border-radius:12px; font-size:16px; font-weight:600;
@@ -27,10 +29,20 @@
       transition: transform .08s ease, filter .2s ease, opacity .2s ease;
     }
     .btn:active{ transform: translateY(1px) }
-    .btn[disabled]{
-      background: var(--disabled); color:#94a3b8; cursor:not-allowed;
-      box-shadow:none; filter:saturate(.6); opacity:.6;
+    .btn[disabled]{ background: var(--disabled); color:#94a3b8; cursor:not-allowed; box-shadow:none; filter:saturate(.6); opacity:.6; }
+
+    .status{ font-size:12px; color:var(--muted); text-align:center; max-width:320px }
+    .status b{ color:var(--text) }
+
+    /* Panel debug (oculto por defecto) */
+    .debug{
+      display:none; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size:12px; color:#cbd5e1; background:#0b1220; border:1px solid #1f2937;
+      padding:10px; border-radius:10px; width:min(92vw, 420px);
+      box-shadow:0 8px 24px rgba(0,0,0,.35);
     }
+    .debug.show{ display:block }
+    .warn{ color:var(--warn) }
   </style>
 </head>
 <body>
@@ -51,16 +63,18 @@
       </div>
 
       <!-- Ángulo -->
-      <div class="readout">
-        <div id="deg" class="deg">—</div><div class="unit">°</div>
-      </div>
-      <!-- Distancia en metros -->
-      <div class="readout">
-        <div id="meters" class="deg" style="font-size:32px">—</div><div class="unit">m</div>
-      </div>
+      <div class="readout"><div id="deg" class="deg">—</div><div class="unit">°</div></div>
+      <!-- Distancia -->
+      <div class="readout"><div id="meters" class="deg" style="font-size:32px">—</div><div class="unit">m</div></div>
 
       <!-- Botón condicional (<100 m) -->
       <button id="goBtn" class="btn" disabled>Ir</button>
+
+      <!-- Estado / ayuda -->
+      <div id="status" class="status">Permite movimiento y ubicación. Mantén el teléfono <b>vertical</b> mirando al destino.</div>
+
+      <!-- Debug (toque prolongado para alternar) -->
+      <div id="debug" class="debug"></div>
     </div>
   </div>
 
@@ -68,15 +82,27 @@
 
   <script>
   (function(){
-    // ===== Utilidades =====
+    // ================= CONFIG =================
+    // Punto objetivo:
+    const A_LAT = 4.677024;
+    const A_LNG = -74.064323;
+
+    // Ajuste manual de declinación (grados). Si notas un sesgo constante, prueba +/- 2..10.
+    // Ej.: en gran parte de Colombia el ajuste puede rondar -6 a -10. Déjalo en 0 si no es necesario.
+    const DECLINATION_OFFSET = 0;
+
+    // ================= UTILIDADES =================
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const arrowWrap = document.getElementById('arrowWrap');
     const degEl = document.getElementById('deg');
     const metersEl = document.getElementById('meters');
     const goBtn = document.getElementById('goBtn');
     const tapHint = document.getElementById('tapHint');
+    const statusEl = document.getElementById('status');
+    const debugEl = document.getElementById('debug');
 
     const toRad = (d)=> d * Math.PI / 180;
+    const toDeg = (r)=> r * 180 / Math.PI;
     const normalize = (d)=> { d = d % 360; return d < 0 ? d + 360 : d; };
 
     function screenAngle(){
@@ -85,7 +111,6 @@
       return 0;
     }
 
-    // Distancia Haversine (metros)
     function distanceMeters(lat1, lon1, lat2, lon2){
       const R = 6371000; // m
       const dφ = toRad(lat2 - lat1);
@@ -97,7 +122,16 @@
       return R * c;
     }
 
-    // Suavizado circular del heading
+    function initialBearing(lat1, lon1, lat2, lon2){
+      // OJO: bearing DESDE (lat1,lon1) HACIA (lat2,lon2)
+      const φ1 = toRad(lat1), φ2 = toRad(lat2);
+      const Δλ = toRad(lon2 - lon1);
+      const y = Math.sin(Δλ) * Math.cos(φ2);
+      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+      return normalize(toDeg(Math.atan2(y, x)));
+    }
+
+    // Suavizado circular (EMA)
     let emaHeading = null; const SMOOTH = 0.15;
     function smoothHeading(value){
       if (value == null) return emaHeading;
@@ -107,9 +141,8 @@
       return emaHeading;
     }
 
-    // ===== Continuidad visual de la flecha =====
-    let lastVisual = null;  // último ángulo modular (0..360)
-    let cumVisual = 0;      // ángulo acumulado continuo
+    // Continuidad visual
+    let lastVisual = null, cumVisual = 0;
     function renderArrow(absAngle0to360){
       if (lastVisual === null){
         lastVisual = absAngle0to360;
@@ -117,87 +150,120 @@
         arrowWrap.style.transform = `rotate(${cumVisual}deg)`;
         return;
       }
-      const delta = (((absAngle0to360 - lastVisual) + 540) % 360) - 180; // -180..+180
+      const delta = (((absAngle0to360 - lastVisual) + 540) % 360) - 180;
       cumVisual += delta;
       lastVisual = absAngle0to360;
       arrowWrap.style.transform = `rotate(${cumVisual}deg)`;
     }
 
-    // ===== Punto objetivo =====
-    // const A_LAT = 4.670373; // carulla zona T (ejemplo anterior)
-    // const A_LNG = -74.055733;
+    // ================= ESTADO =================
+    let deviceHeading = null;    // 0..360 (azimut del teléfono)
+    let targetBearing = null;    // 0..360 (rumbo desde tu posición al punto)
+    let lastFix = { lat:null, lng:null, dist:null };
+    let headingSource = 'idle';  // 'absolute', 'webkit', 'alpha', 'none'
 
-    // --- esquina
-    // const A_LAT = 4.677024;
-    // const A_LNG = -74.064323;
+    function setStatus(msg){ statusEl.innerHTML = msg; }
 
-
-    const A_LAT = 4.678237;
-    const A_LNG = -74.064402;
-
-
-
-    function initialBearing(lat1, lon1, lat2, lon2){
-      const φ1 = toRad(lat1), φ2 = toRad(lat2);
-      const λ1 = toRad(lon1), λ2 = toRad(lon2);
-      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
-      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
-      let θ = Math.atan2(y, x) * 180 / Math.PI;
-      return (θ + 360) % 360;
-    }
-
-    let targetBearing = null; // ángulo absoluto 0..360
-    let deviceHeading = null; // heading del teléfono 0..360
-
-    // Actualiza estado del botón según distancia
     function updateButton(distanceM){
       const canGo = Number.isFinite(distanceM) && distanceM < 100;
       goBtn.disabled = !canGo;
     }
 
+    function updateDebug(e){
+      const ang = screenAngle();
+      const lines = [
+        `src: ${headingSource}`,
+        `targetBearing: ${targetBearing!=null? targetBearing.toFixed(1):'—'}°`,
+        `deviceHeading: ${deviceHeading!=null? deviceHeading.toFixed(1):'—'}°`,
+        `relative: ${(targetBearing!=null&&deviceHeading!=null)? normalize(targetBearing-deviceHeading).toFixed(1):'—'}°`,
+        `alpha: ${typeof e?.alpha==='number'? e.alpha.toFixed(1):'—'}`,
+        `beta: ${typeof e?.beta==='number'? e.beta.toFixed(1):'—'}`,
+        `gamma: ${typeof e?.gamma==='number'? e.gamma.toFixed(1):'—'}`,
+        `screenAngle: ${ang}°`,
+        `declinationOffset: ${DECLINATION_OFFSET}°`,
+        `dist: ${lastFix.dist!=null? Math.round(lastFix.dist):'—'} m`,
+        `lat,lng: ${lastFix.lat!=null? lastFix.lat.toFixed(6):'—'}, ${lastFix.lng!=null? lastFix.lng.toFixed(6):'—'}`
+      ];
+      debugEl.textContent = lines.join('\n');
+    }
+
+    // ================= GEO =================
+    const geoOpts = { enableHighAccuracy:true, timeout:10000, maximumAge:0 };
+    (function startGeo(){
+      const isHttps = location.protocol === 'https:' || ['localhost','127.0.0.1'].includes(location.hostname);
+      if (!('geolocation' in navigator)) { console.warn('Sin geolocalización'); setStatus('Tu navegador no soporta geolocalización'); return; }
+      if (!isHttps) console.warn('Usa HTTPS o localhost para mayor precisión');
+      navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
+    })();
+
     function onPosSuccess(pos){
-      const { latitude, longitude } = pos.coords;
+      const { latitude, longitude, accuracy } = pos.coords;
+      lastFix.lat = latitude; lastFix.lng = longitude;
 
-      // Bearing (mantengo tu convención actual)
-      targetBearing = normalize(360 - initialBearing(A_LAT, A_LNG, latitude, longitude));
-      degEl.textContent = Math.round(targetBearing);
+      // Bearing CORRECTO: desde tu posición → objetivo
+      targetBearing = initialBearing(latitude, longitude, A_LAT, A_LNG);
 
-      // Distancia en metros
+      // Distancia
       const dist = distanceMeters(latitude, longitude, A_LAT, A_LNG);
+      lastFix.dist = dist;
       metersEl.textContent = Math.round(dist);
       updateButton(dist);
 
+      degEl.textContent = targetBearing != null ? Math.round(targetBearing) : '—';
+
+      // Info de precisión (si la geo es muy imprecisa, avisa)
+      if (typeof accuracy === 'number' && accuracy > 50){
+        setStatus(`Precisión GPS baja (~${Math.round(accuracy)} m). Muévete o espera mejor señal.`);
+      } else {
+        setStatus('Mantén el teléfono vertical y apunta hacia el destino.');
+      }
+
       updateArrow();
     }
+
     function onPosError(err){
       console.warn('Geoloc error:', err);
       targetBearing = null;
       metersEl.textContent = '—';
       updateButton(Infinity);
+      setStatus('No se pudo obtener tu ubicación.');
     }
 
-    // ===== Brújula del dispositivo =====
+    // ================= HEADING =================
     function postureAdjust(h, e){
-      const beta = typeof e.beta === 'number' ? e.beta : 0;
+      // Si el teléfono está vertical (beta lejos de 0), aplicamos compensación para retrato
+      const beta = typeof e?.beta === 'number' ? e.beta : 0;
       const ang = screenAngle();
-      const upright = Math.abs(beta) >= 30;
+      const upright = Math.abs(beta) >= 30; // vertical
       if (!upright) return h;
-      if (ang === 0 || ang === 180){ // retrato
-        return normalize(h + 90);
-      }
+      // En retrato estándar (0 o 180) el "frente" mira por el lado corto
+      if (ang === 0 || ang === 180) return normalize(h + 90);
       return h;
     }
 
     function computeHeadingFromEvent(e){
+      // iOS: webkitCompassHeading (típicamente magnético). Aplicamos offset si lo deseas.
       if (typeof e.webkitCompassHeading === 'number'){
-        return normalize(e.webkitCompassHeading);
+        headingSource = 'webkit';
+        return normalize(e.webkitCompassHeading + DECLINATION_OFFSET);
       }
+      // Chrome/Android: si es absoluto, alpha suele estar referenciado al marco terrestre
+      if (e.absolute === true && typeof e.alpha === 'number'){
+        headingSource = 'absolute';
+        let hdg = 360 - e.alpha;                // convención CW desde Norte
+        hdg = normalize(hdg + screenAngle());   // compensa rotación UI
+        hdg = postureAdjust(hdg, e);            // compensa teléfono vertical
+        return hdg;
+      }
+      // Fallback relativo (menos confiable)
       if (typeof e.alpha === 'number'){
+        headingSource = 'alpha';
         let hdg = 360 - e.alpha;
         hdg = normalize(hdg + screenAngle());
         hdg = postureAdjust(hdg, e);
         return hdg;
       }
+      headingSource = 'none';
       return null;
     }
 
@@ -207,16 +273,22 @@
         deviceHeading = smoothHeading(h);
         updateArrow();
       }
+      // Avisos de iOS: exactitud magnética alta => ok; alta cifra = mala.
+      if (typeof e.webkitCompassAccuracy === 'number'){
+        if (e.webkitCompassAccuracy > 20){
+          setStatus('Precisión de brújula baja. Mueve el teléfono en forma de 8 para calibrar.');
+        }
+      }
+      updateDebug(e);
     }
 
-    // ===== Vinculación flecha =====
     function updateArrow(){
       if (targetBearing == null || deviceHeading == null) return;
-      const relative = normalize(targetBearing - deviceHeading); // 0..360
+      const relative = normalize(targetBearing - deviceHeading);
       renderArrow(relative);
     }
 
-    // ===== Permisos / inicio =====
+    // ================= PERMISOS / INICIO =================
     async function requestIOSPermissionIfNeeded(){
       if (!isIOS) return true;
       const fn = window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission;
@@ -233,19 +305,8 @@
       tapHint.classList.add('hidden');
     }
 
-    // Geo
-    const geoOpts = { enableHighAccuracy:true, timeout:10000, maximumAge:0 };
-    (function startGeo(){
-      const isHttps = location.protocol === 'https:' || ['localhost','127.0.0.1'].includes(location.hostname);
-      if (!('geolocation' in navigator)) { console.warn('Sin geolocalización'); return; }
-      if (!isHttps) console.warn('Usa HTTPS o localhost para mayor precisión');
-      navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
-    })();
+    if (!isIOS) startHeading(); // Android/desktop arranca solo
 
-    // Android arranca solo
-    if (!isIOS) startHeading();
-
-    // iOS requiere toque
     let armed = true;
     window.addEventListener('click', async ()=>{
       if (!armed) return;
@@ -254,18 +315,24 @@
       if (ok) startHeading(); else tapHint.textContent = 'permiso de movimiento denegado';
     }, { once:true });
 
-    // Reset de suavizado y continuidad al rotar pantalla
     (screen.orientation || window).addEventListener?.('change', ()=>{
       emaHeading = null;
       lastVisual = null;
     });
 
-    // Acción del botón
+    // Botón
     goBtn.addEventListener('click', ()=>{
       if (goBtn.disabled) return;
-      // Redirige a Google
       window.location.href = 'https://www.google.com';
     });
+
+    // Debug: toque prolongado para alternar panel
+    let pressTimer=null;
+    window.addEventListener('pointerdown', ()=>{
+      clearTimeout(pressTimer);
+      pressTimer = setTimeout(()=> debugEl.classList.toggle('show'), 1200);
+    });
+    window.addEventListener('pointerup', ()=> clearTimeout(pressTimer));
   })();
   </script>
 </body>
