@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Distancia a Punto Fijo</title>
+  <style>
+    :root {
+      --bg: #0f172a;        /* slate-900 */
+      --panel: #111827;     /* gray-900 */
+      --muted: #94a3b8;     /* slate-400 */
+      --text: #e5e7eb;      /* gray-200 */
+      --accent: #10b981;    /* emerald-500 */
+      --warn: #f59e0b;      /* amber-500 */
+      --danger: #ef4444;    /* red-500 */
+      --border: #1f2937;    /* gray-800 */
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 70% -10%, #0b1d34 0%, var(--bg) 45%);
+      color: var(--text);
+      display: grid; place-items: start center; padding: 24px;
+    }
+    .container { width: min(680px, 100%); display: grid; gap: 16px; }
+    header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 16px; border: 1px solid var(--border); border-radius: 16px; background: linear-gradient(180deg, #0c1425 0%, #0a0f1a 100%);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    header h1 { font-size: clamp(18px, 3.6vw, 22px); margin: 0; letter-spacing: .2px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: #0b1220; border: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+    .ok { color: var(--accent); }
+    .warn { color: var(--warn); }
+    .err { color: var(--danger); }
+    .card {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, #0a0f1b 0%, #0a0e18 100%);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .card h2 { margin: 0 0 8px; font-size: 18px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .value { display: block; padding: 8px 10px; border-radius: 10px; background: #0b1220; border: 1px solid var(--border); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; color: #cbd5e1; }
+    .result { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 12px; background: #0b1220; border: 1px solid var(--border); }
+    .result strong { font-size: 20px; }
+    footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Distancia a Punto Fijo</h1>
+      <p id="geoStatus" class="pill warn" role="status">Geolocation status: initializing…</p>
+    </header>
+
+    <section class="card">
+      <h2>Referencia</h2>
+      <p class="sub">Siempre calculando desde el punto fijo hacia tu posición actual.</p>
+      <div class="row">
+        <div>
+          <div class="sub">Punto fijo (A) — Lat</div>
+          <code class="value" id="aLat">4.670373</code>
+        </div>
+        <div>
+          <div class="sub">Punto fijo (A) — Lng</div>
+          <code class="value" id="aLng">-74.055733</code>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Tu ubicación actual</h2>
+      <div class="row">
+        <div>
+          <div class="sub">Latitud</div>
+          <code class="value" id="lat">–</code>
+        </div>
+        <div>
+          <div class="sub">Longitud</div>
+          <code class="value" id="lng">–</code>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div>
+          <div class="sub">Precisión (m)</div>
+          <code class="value" id="acc">–</code>
+        </div>
+        <div>
+          <div class="sub">Timestamp</div>
+          <code class="value" id="ts">–</code>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Resultados</h2>
+      <div class="result" aria-live="polite">
+        <div>
+          <div class="sub">Distancia</div>
+          <strong id="outDist">–</strong>
+        </div>
+        <div>
+          <div class="sub">Ángulo (bearing inicial)</div>
+          <strong id="outBear">–</strong>
+        </div>
+        <div>
+          <div class="sub">Dirección para caminar</div>
+          <strong id="outDir">–</strong>
+        </div>
+      </div>
+      <p class="sub" style="margin-top:10px;">Redirige a <code class="value" style="display:inline-block">https://google.com</code> cuando estés a &lt; 100 m.</p>
+    </section>
+
+    <footer>
+      Funciona mejor en HTTPS (o localhost). Tus coordenadas permanecen en el dispositivo.
+    </footer>
+  </div>
+
+  <!-- Selector oculto para reutilizar la función updateOutputs sin modificar su firma -->
+  <select id="units" style="display:none">
+    <option value="m" selected>Meters</option>
+  </select>
+
+  <script>
+    // --- Utilidades (sin cambios de firma) ---
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    function fmtNum(n, digits=6) {
+      if (Number.isFinite(n)) return n.toFixed(digits).replace(/\.0+$/,'');
+      return '–';
+    }
+    function tsFmt(ms) {
+      if (!ms) return '–';
+      const d = new Date(ms);
+      return d.toLocaleString();
+    }
+    function setStatus(text, mode='warn') {
+      const el = $('#geoStatus');
+      el.textContent = `Geolocation status: ${text}`;
+      el.classList.remove('ok','warn','err');
+      el.classList.add(mode);
+    }
+    function toRad(deg){ return deg * Math.PI / 180; }
+    function toDeg(rad){ return rad * 180 / Math.PI; }
+    function haversine(lat1, lon1, lat2, lon2) {
+      const R = 6371_000; // meters
+      const φ1 = toRad(lat1), φ2 = toRad(lat2);
+      const Δφ = toRad(lat2 - lat1);
+      const Δλ = toRad(lon2 - lon1);
+      const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const d = R * c;
+      return d; // meters
+    }
+    function initialBearing(lat1, lon1, lat2, lon2) {
+      const φ1 = toRad(lat1), φ2 = toRad(lat2);
+      const λ1 = toRad(lon1), λ2 = toRad(lon2);
+      const y = Math.sin(λ2-λ1) * Math.cos(φ2);
+      const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(λ2-λ1);
+      let θ = Math.atan2(y, x) * 180 / Math.PI;
+      return (θ + 360) % 360; // normalize 0..360
+    }
+    function convertDistance(meters, unit) {
+      switch(unit) {
+        case 'km': return meters / 1000;
+        case 'mi': return meters / 1609.344;
+        case 'nm': return meters / 1852;
+        case 'm': default: return meters;
+      }
+    }
+    function bearingToCardinal(bearing) {
+      const dirs = ['North','North-East','East','South-East','South','South-West','West','North-West'];
+      return dirs[Math.round(bearing / 45) % 8];
+    }
+
+    // --- Config fija ---
+    const A_LAT = 4.670373;
+    const A_LNG = -74.055733;
+    const THRESHOLD_METERS = 100;
+    const REDIRECT_URL = 'https://google.com';
+
+    // Mostrar A en UI (solo lectura)
+    $('#aLat').textContent = fmtNum(A_LAT, 6);
+    $('#aLng').textContent = fmtNum(A_LNG, 6);
+
+    // Reutilizar updateOutputs original (lee #units)
+    function updateOutputs(dMeters, bearingDeg) {
+      const unit = $('#units').value; // 'm' oculto
+      const converted = convertDistance(dMeters, unit);
+      $('#outDist').textContent = `${fmtNum(converted, unit==='m'?0:3)} ${unit}`;
+      $('#outBear').textContent = `${fmtNum(bearingDeg, 1)}°`;
+      $('#outDir').textContent = `${bearingToCardinal(bearingDeg)} (${fmtNum(bearingDeg,1)}°)`;
+    }
+
+    // Geolocalización
+    let watchId = null;
+    let redirected = false;
+
+    function onPosSuccess(pos) {
+      const { latitude, longitude, accuracy } = pos.coords;
+      $('#lat').textContent = fmtNum(latitude, 6);
+      $('#lng').textContent = fmtNum(longitude, 6);
+      $('#acc').textContent = fmtNum(accuracy, 1);
+      $('#ts').textContent = tsFmt(pos.timestamp);
+      setStatus(watchId ? 'watching…' : 'position acquired', 'ok');
+
+      // Cálculo SIEMPRE A -> posición actual
+      const dMeters = haversine(A_LAT, A_LNG, latitude, longitude);
+      const brg = initialBearing(A_LAT, A_LNG, latitude, longitude);
+      updateOutputs(dMeters, brg);
+
+      // Realce visual si < 50 m
+      if (dMeters < 50) {
+        $('#outDist').style.color = 'var(--accent)';
+      } else {
+        $('#outDist').style.color = 'inherit';
+      }
+
+      // Redirección si < 100 m
+      if (dMeters < THRESHOLD_METERS && !redirected) {
+        redirected = true;
+        // Redirección "real" en la misma pestaña
+        window.location.href = REDIRECT_URL;
+      }
+      // Si te vuelves a alejar bastante, permitir futura redirección
+      if (dMeters > THRESHOLD_METERS + 20) {
+        redirected = false;
+      }
+    }
+
+    function onPosError(err) {
+      console.error(err);
+      const map = { 1: 'Permission denied', 2: 'Position unavailable', 3: 'Timeout' };
+      setStatus(`${map[err.code] || 'Unknown error'} — ${err.message}`, 'err');
+    }
+
+    const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+
+    // Inicio automático del watch
+    (function start(){
+      const isHttps = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+      if (!('geolocation' in navigator)) {
+        setStatus('Geolocation not supported in this browser', 'err');
+        return;
+      }
+      if (!isHttps) {
+        setStatus('Site must be HTTPS or localhost for precise location', 'warn');
+      } else {
+        setStatus('starting watch…', 'warn');
+      }
+      watchId = navigator.geolocation.watchPosition(onPosSuccess, onPosError, geoOpts);
+    })();
+  </script>
+</body>
+</html>
+
