@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>AR Photo with glTF — Minimal (Far & Big)</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #000; }
+    a-scene { position: fixed !important; inset: 0 !important; z-index: 1; }
+  </style>
+
+  <!-- A-Frame + AR.js (stable combo) -->
+  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
+</head>
+<body>
+
+  <a-scene id="scene" embedded vr-mode-ui="enabled: false"
+           renderer="alpha: true; antialias: true; precision: mediump; powerPreference: high-performance; logarithmicDepthBuffer: true"
+           arjs="
+             sourceType: webcam;
+             facingMode: environment;
+             debugUIEnabled: false;
+             videoTexture: true;
+             trackingMethod: best;
+             sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;
+           ">
+    <a-assets>
+      <!-- Reemplaza el src con tu GLB/GLTF. Ideal: .glb con texturas embebidas -->
+      <a-asset-item id="model" src="BCool.glb"></a-asset-item>
+    </a-assets>
+
+    <!-- Luces básicas -->
+    <a-entity light="type: ambient; intensity: 0.9"></a-entity>
+    <a-entity light="type: directional; intensity: 0.9" position="1 2 1"></a-entity>
+
+    <!-- Cámara (aumentamos el 'far' para ver objetos lejanos) -->
+    <a-entity id="camera" camera="near: 0.1; far: 5000" look-controls wasd-controls="enabled:false"></a-entity>
+
+    <!-- Holder del modelo: por defecto lo pondremos muy lejos delante de la cámara vía JS -->
+    <a-entity id="holder" position="0 0 -2">
+      <a-entity id="modelEntity" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    // Ajustes rápidos
+    const DIST_METERS = 60;   // ~50–70 m (puedes cambiar a 50 o 70)
+    const HEIGHT_METERS = 0;  // altura relativa (0 = a nivel de cámara)
+    const BIG_SCALE = 30;     // escala grande (ajústalo según tu modelo)
+
+    const sceneEl  = document.getElementById('scene');
+    const holder   = document.getElementById('holder');
+    const modelEl  = document.getElementById('modelEntity');
+
+    // Coloca el objeto lejos y grande cuando el modelo esté listo
+    modelEl.addEventListener('model-loaded', () => {
+      // Empujar el holder lejos al frente de la cámara
+      holder.object3D.position.set(0, HEIGHT_METERS, -DIST_METERS);
+
+      // Rotación opcional para que “mire” a la cámara (ajusta si no la necesitas)
+      modelEl.object3D.rotation.set(0, 0, 0);
+
+      // Escala grande para que sea visible a distancia
+      modelEl.object3D.scale.set(BIG_SCALE, BIG_SCALE, BIG_SCALE);
+
+      // Evita que se “pierda” por recorte del frustum si es muy grande
+      const cameraEl = document.getElementById('camera');
+      if (cameraEl && cameraEl.getAttribute('camera')) {
+        // ya está far:5000 en el atributo, pero por si se quiere ajustar dinámicamente:
+        cameraEl.setAttribute('camera', 'far', 5000);
+      }
+    });
+
+    // Intento de arranque automático de cámara. En iOS puede requerir gesto.
+    window.addEventListener('load', () => {
+      try {
+        const sys = sceneEl.systems && sceneEl.systems['arjs'];
+        if (sys && sys.arSource && sys.arSource.ready === false) {
+          sys.arSource.start().catch(()=>{ /* iOS podría requerir un toque del usuario */ });
+        }
+      } catch (e) { /* silencioso */ }
+    });
+  </script>
+</body>
+</html>
+
