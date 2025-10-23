@@ -1,88 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>WebXR AR Smoke Test</title>
-<style>html,body{height:100%;margin:0;background:#000} a-scene{position:fixed;inset:0}</style>
-<script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/aframe-ar-hit-test-component@1.0.3/dist/aframe-ar-hit-test-component.min.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AR.js GPS Anchor</title>
+  <script src="https://aframe.io/releases/1.4.1/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.js"></script>
 </head>
-<body>
-<a-scene id="scene"
-  renderer="alpha:true; antialias:true; physicallyCorrectLights:true; logarithmicDepthBuffer:true"
-  xr-mode-ui="enabled: true"
-  webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay,local-floor,anchors; overlayElement: #overlay"
-  vr-mode-ui="enabled:false"
-  embedded>
-  <a-entity light="type:ambient;intensity:1"></a-entity>
-  <a-entity light="type:directional;intensity:0.8" position="1 2 1"></a-entity>
-  <a-entity id="camera" camera="near:0.05; far:5000"></a-entity>
+<body style="margin:0; overflow:hidden;">
+  <a-scene
+    vr-mode-ui="enabled: false"
+    renderer="antialias:true; alpha:true; logarithmicDepthBuffer:true"
+    embedded
+    arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false; trackingMethod: best;"
+  >
+    <a-assets>
+      <a-asset-item id="model" src="BCool.glb"></a-asset-item>
+    </a-assets>
 
-  <a-entity id="reticle"
-    geometry="primitive:ring;radiusInner:0.06;radiusOuter:0.08"
-    material="shader:flat;color:#00ffff;opacity:0.9"
-    rotation="-90 0 0" visible="false"></a-entity>
-  <a-entity ar-hit-test="target:#reticle; type: transient"></a-entity>
+    <!-- Cámara con GPS -->
+    <a-entity gps-camera rotation-reader></a-entity>
 
-  <a-box id="box" visible="false" depth="0.2" height="0.2" width="0.2" color="#39f"></a-box>
-</a-scene>
-
-<div id="overlay" style="position:fixed;left:0;right:0;bottom:0;padding:10px 12px;text-align:center;color:#fff;background:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.45) 25%);font:14px system-ui">
-  Si ves negro, toca la pantalla una vez. Mueve el móvil hasta ver el retículo; toca para colocar el cubo.
-</div>
-
-<script>
-(async () => {
-  const scene = document.getElementById('scene');
-  const reticle = document.getElementById('reticle');
-  const box = document.getElementById('box');
-
-  // 1) Chequear soporte
-  if (!('xr' in navigator)) {
-    console.warn('navigator.xr no está disponible. Usa HTTPS o el dispositivo no soporta WebXR.');
-  } else {
-    try {
-      const supported = await navigator.xr.isSessionSupported('immersive-ar');
-      console.log('immersive-ar soportado:', supported);
-      if (!supported) {
-        console.warn('Este dispositivo/navegador no soporta immersive-ar (hit-test).');
-      }
-    } catch (e) { console.error('isSessionSupported error:', e); }
-  }
-
-  // Logs de entrada/salida de AR
-  scene.addEventListener('enter-vr', () => {
-    const isAR = scene.is('ar-mode');
-    console.log(isAR ? 'AR MODE ON' : 'VR MODE ON');
-  });
-  scene.addEventListener('exit-vr', () => console.log('AR/VR OFF'));
-
-  // Mostrar retículo cuando haya hit; el componente ya maneja visible,
-  // aquí sólo colocamos el cubo al tocar.
-  scene.addEventListener('click', () => {
-    if (!reticle.getAttribute('visible')) return;
-    box.object3D.position.copy(reticle.object3D.position);
-    // Alinear yaw
-    const r = reticle.object3D.rotation;
-    box.object3D.rotation.set(0, r.y, 0);
-    box.setAttribute('visible', 'true');
-    console.log('Objeto colocado en', box.object3D.position);
-  });
-
-  // Capturar fallos de sesión WebXR
-  const _enterAR = scene.enterAR;
-  scene.enterAR = async function() {
-    try {
-      await _enterAR.call(scene);
-      console.log('Sesión AR iniciada');
-    } catch (e) {
-      console.error('Fallo al iniciar AR:', e);
-      document.getElementById('overlay').textContent = 'No se pudo iniciar AR: ' + e.message;
-    }
-  };
-})();
-</script>
+    <!-- Objeto geolocalizado -->
+    <a-entity
+      gltf-model="#model"
+      gps-entity-place="latitude: 4.677044749485872, longitude: -74.06428412118991"  <!-- pon aquí tus coords -->
+      scale="15 15 15">   <!-- escala grande para verlo a distancia -->
+    </a-entity>
+  </a-scene>
 </body>
 </html>
 
