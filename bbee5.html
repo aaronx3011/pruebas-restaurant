@@ -35,8 +35,7 @@
     <a-entity light="type: directional; intensity: 0.9" position="1 2 1"></a-entity>
 
     <!-- Cámara (aumentamos el 'far' para ver objetos lejanos) -->
-    <a-entity id="camera" camera="near: 0.1; far: 5000" look-controls wasd-controls="enabled:false"></a-entity>
-
+    <a-entity id="camera" camera="near: 0.1; far: 5000" look-controls="enabled: false" wasd-controls="enabled:false"></a-entity>
     <!-- Holder del modelo: por defecto lo pondremos muy lejos delante de la cámara vía JS -->
     <a-entity id="holder" position="0 0 -2">
       <a-entity id="modelEntity" gltf-model="#model" shadow="cast: true; receive: true"></a-entity>
